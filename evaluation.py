@@ -44,7 +44,7 @@ if __name__ == '__main__':
     subset = 1
 
     # sporadic setting 0 = Periodic, 1 = Sporadic
-    SPORADIC = 0
+    SPORADIC = 1
     hyper_period = 10
 
     iterations = 10
@@ -165,5 +165,5 @@ if __name__ == '__main__':
         plt.xlabel('Utilization in %')
         plt.ylabel('Acceptance Rate')
     plt.legend(resources_no)
+    plt.savefig('eval_sporadic.png')
     plt.show()
-    plt.savefig('eval_periodic.png')
