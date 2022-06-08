@@ -9,8 +9,8 @@ import getopt
 
 
 def main(argv):
-    ntasks = 2
-    msets = 3
+    ntasks = 5
+    msets = 1
     processors = 1
     # num of resources
     res_num = 1
@@ -43,7 +43,7 @@ def main(argv):
             subset = int(arg)
 
     for i in range(5, 30, 5):
-        print(i)
+        # print(i)
         utli = float(i / 100)
         tasksets_name = '../experiments/inputs/input_task_periodic/' + str(subset) + '/tasksets_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(
             utli) + '_r' + str(res_num) + '_s' + str(c_min) + '_l' + str(c_max)

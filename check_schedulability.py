@@ -23,7 +23,7 @@ def scheduling_time(scheduler):
 
 if __name__ == '__main__':
     # tasks per taskset
-    ntasks = 11
+    ntasks = 10
     # number of tasksets
     msets = 1
     # number of processors
@@ -39,12 +39,13 @@ if __name__ == '__main__':
     # Least common multiple of all Periods in tasksets
     hyper_period = 10
     possible = 0
-    iterations = 100000
+    mod = 0
+    iterations = 1000
     for i in range(iterations):
         # num of resources
         res_num = random.choice([1, 2, 4, 8])
 
-        generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset)
+        generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod)
         tasksets = load_tasksets(ntasks=ntasks, msets=msets, processors=processors, res_num=res_num, c_min=c_min, c_max=c_max, subset=subset, SPORADIC=SPORADIC)
         settings = {
                 'hyper_period': hyper_period,
@@ -56,6 +57,7 @@ if __name__ == '__main__':
                 'c_max': c_max,
                 'subset': subset,
                 'SPORADIC': SPORADIC,
+                'mod': mod,
                 }
 
         scheduler = Scheduler(tasksets, settings)

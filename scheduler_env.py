@@ -17,6 +17,7 @@ class SchedulerEnv(Env):
         self.c_max = scheduler.c_max
         self.subset = scheduler.subset
         self.SPORADIC = scheduler.SPORADIC
+        self.mod = scheduler.mod
 
         self.action_shape = self.ntasks * self.msets
         self.observation_shape = tf.convert_to_tensor(scheduler.to_array()).shape
@@ -40,10 +41,14 @@ class SchedulerEnv(Env):
         # self.time = self.state.time
         # possible_action = True
                
-        while len(deepcopy(self.state).generate_states()) == 1:
+        # while len(deepcopy(self.state).generate_states()) == 1:
+        #     self.state = deepcopy(self.state).generate_states()[0][0]
+        #     self.time = self.state.time
+        # print(deepcopy(self.state).generate_states()[0][1])
+        while deepcopy(self.state).generate_states()[0][1] == 0:
             self.state = deepcopy(self.state).generate_states()[0][0]
             self.time = self.state.time
-            
+
         # calculate reward
         if possible_action:
             reward = self.state.calculate_scores()
@@ -75,13 +80,12 @@ class SchedulerEnv(Env):
         # generate new taskset with same setting
         # if won:
         self.res_num = random.choice([1,2,4,8])
-        generate_tasksets(self.ntasks, self.msets, self.processor_num, self.res_num, self.c_min, self.c_max, self.subset)
+        generate_tasksets(self.ntasks, self.msets, self.processor_num, self.res_num, self.c_min, self.c_max, self.subset, self.mod)
             # print('generate new taskets ...')
         # load newly generated taskset
         tasksets = load_tasksets(self.ntasks, self.msets, self.processor_num, self.res_num, self.c_min, self.c_max, self.subset, self.SPORADIC)
         
         settings = {
-            'hyper_period': self.hyper_period,
             'ntasks': self.ntasks, 
             'msets': self.msets, 
             'processors': self.processor_num,
@@ -90,6 +94,7 @@ class SchedulerEnv(Env):
             'c_max': self.c_max,
             'subset': self.subset,
             'SPORADIC': self.SPORADIC,
+            'mod': self.mod,
         }
         self.state = Scheduler(tasksets, settings)
 

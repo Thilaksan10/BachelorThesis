@@ -1,4 +1,5 @@
 from copy import deepcopy
+from operator import mod
 from mcts import TreeNode, MCTS
 import numpy as np
 import taskset_generator.generator as gen
@@ -111,7 +112,6 @@ class Scheduler:
         self.missed_deadline = []
 
         if settings is not None:
-            self.hyper_period = settings['hyper_period']
             self.ntasks = settings['ntasks']
             self.msets = settings['msets']
             self.processor_num = settings['processors']
@@ -120,6 +120,7 @@ class Scheduler:
             self.c_max = settings['c_max']
             self.subset = settings['subset']
             self.SPORADIC = settings['SPORADIC']
+            self.mod = settings['mod']
 
             for i in range(self.res_num):
                 self.resources[f'resource_{i+1}'] = None
@@ -132,6 +133,16 @@ class Scheduler:
             self.tasksets = tasksets
         else:
             self.__dict__ = deepcopy(scheduler.__dict__)
+
+        self.hyper_period = self.calculate_hyper_period()
+
+    def calculate_hyper_period(self):
+        max = 1
+        for taskset in self.tasksets:
+            for task in taskset:
+                if task.period > max:
+                    max = task.period
+        return max
 
     # check if a new job is released
     def new_job_released(self, previous_state):
@@ -458,13 +469,13 @@ class Scheduler:
 
         deadline_miss = False
         for job in self.ready_list:
-            if job.deadline <= self.time:
+            if job.deadline < self.time:
                 # score += 1000 * task.deadline
                 deadline_miss = True
                 break
                 #score -= self.time - job.deadline
         if self.processors['processor_1']:
-            if self.processors['processor_1'].deadline <= self.time:
+            if self.processors['processor_1'].deadline < self.time:
                 deadline_miss = True
         
             
@@ -662,12 +673,12 @@ class Scheduler:
 
         return f'------------------------Schedule------------------------\n\nTasksets:\n{tasksets}\nTime: {self.time}\n{readylist}\n{resources}\n{processors}\n\n'
 
-def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset):
-    for i in range(10, 15, 5):
+def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod):
+    for i in range(15, 20, 5):
         utli = float(i / 100)
         tasksets_name = './experiments/inputs/input_task_periodic/' + str(subset) + '/tasksets_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(
             utli) + '_r' + str(res_num) + '_s' + str(c_min) + '_l' + str(c_max)
-        tasksets = gen.generate(ntasks, msets, processors * utli, res_num, 0.5, c_min, c_max, 1)
+        tasksets = gen.generate(ntasks, msets, processors * utli, res_num, 0.5, c_min, c_max, mod)
         np.save(tasksets_name, tasksets)
 
     # for i in range (5, 100, 5):
@@ -704,7 +715,7 @@ def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset):
 def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, SPORADIC):
     # job_sets = []
     task_sets = []
-    for i in range(5, 10, 5):
+    for i in range(15, 20, 5):
         utli = float(i / 100)
         tasksets_name = './experiments/inputs/input_task_periodic/' + str(subset) + '/tasksets_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(utli) + '_r' + str(res_num) + '_s' + str(c_min) + '_l' + str(c_max)  + '.npy'
         task_sets.append(np.load(tasksets_name, allow_pickle=True))
@@ -771,16 +782,15 @@ if __name__ == '__main__':
 
     # sporadic setting 0 = Periodic, 1 = Sporadic
     SPORADIC = 0
+    mod = 0
 
     # Least common multiple of all Periods in tasksets
-    hyper_period = 10
     wins = 0
     
     for i in range(10):
-        generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset)
+        generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod)
         tasksets = load_tasksets(ntasks=ntasks, msets=msets, processors=processors, res_num=res_num, c_min=c_min, c_max=c_max, subset=subset, SPORADIC=SPORADIC)
         settings = {
-            'hyper_period': hyper_period,
             'ntasks': ntasks, 
             'msets': msets, 
             'processors': processors,
@@ -789,6 +799,7 @@ if __name__ == '__main__':
             'c_max': c_max,
             'subset': subset,
             'SPORADIC': SPORADIC,
+            'mod': mod
             }
 
         scheduler = Scheduler(tasksets, settings)

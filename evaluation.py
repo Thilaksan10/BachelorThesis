@@ -6,10 +6,10 @@ from ml_scheduler import Task, Scheduler
 from scheduler_env import SchedulerEnv
 import matplotlib.pyplot as plt
 
-def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli, iteration):
+def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli, mod, iteration):
     tasksets_name = './experiments/evaluation/' + str(subset) + '/tasksets_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(
         utli) + '_r' + str(res_num) + '_s' + str(c_min) + '_l' + str(c_max) + '_i' + str(iteration)
-    tasksets = gen.generate(ntasks, msets, processors * utli, res_num, 0.5, c_min, c_max, 1)
+    tasksets = gen.generate(ntasks, msets, processors * utli, res_num, 0.5, c_min, c_max, mod)
     np.save(tasksets_name, tasksets)
 
 def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli, SPORADIC, iteration):
@@ -31,7 +31,7 @@ def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli
 
 if __name__ == '__main__':
     # tasks per taskset
-    ntasks = 5
+    ntasks = 10
     # number of tasksets
     msets = 1
     # number of processors
@@ -41,27 +41,26 @@ if __name__ == '__main__':
 
     c_min = 0.05
     c_max = 0.1
-    subset = 1
+    subset = 2
 
     # sporadic setting 0 = Periodic, 1 = Sporadic
-    SPORADIC = 1
-    hyper_period = 10
+    SPORADIC = 0
+    mod = 0
 
     iterations = 10
     min_utli = 5
     max_utli = 105
 
-    generate = 0
+    generate = 1
 
     if generate:
         for res_num in resources_no:
             for i in range (min_utli, max_utli, 5):
                 utli = float(i/100)
                 for iteration in range(iterations):
-                    generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli, iteration+1)
+                    generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli, mod, iteration+1)
                     tasksets = load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli, SPORADIC, iteration+1)
                     settings = {
-                        'hyper_period': hyper_period,
                         'ntasks': ntasks, 
                         'msets': msets, 
                         'processors': processors,
@@ -70,6 +69,7 @@ if __name__ == '__main__':
                         'c_max': c_max,
                         'subset': subset,
                         'SPORADIC': SPORADIC,
+                        'mod': mod,
                     }
                     scheduler = Scheduler(tasksets, settings)
                     print(scheduling_time(scheduler))
@@ -95,7 +95,6 @@ if __name__ == '__main__':
     
     tasksets = load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli, SPORADIC, 1)
     settings = {
-        'hyper_period': hyper_period,
         'ntasks': ntasks, 
         'msets': msets, 
         'processors': processors,
@@ -122,7 +121,6 @@ if __name__ == '__main__':
             for iteration in range(iterations):
                 tasksets = load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli, SPORADIC, iteration+1)
                 settings = {
-                    'hyper_period': hyper_period,
                     'ntasks': ntasks, 
                     'msets': msets, 
                     'processors': processors,
@@ -146,7 +144,7 @@ if __name__ == '__main__':
                     observation = state_
                 if reward == 1:
                     won += 1
-                if min_time > 10 and reward == 1:
+                if min_time > scheduler.hyper_period and reward == 1:
                     print(observation.to_string())
                     for job in observation.ready_list:
                         print(f'Task ID: {job.task_id}')
@@ -165,5 +163,5 @@ if __name__ == '__main__':
         plt.xlabel('Utilization in %')
         plt.ylabel('Acceptance Rate')
     plt.legend(resources_no)
-    plt.savefig('eval_sporadic.png')
+    plt.savefig('eval_framebased.png')
     plt.show()

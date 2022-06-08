@@ -62,9 +62,9 @@ class PolicyNetwork(keras.Model):
             self.model = tf.keras.Sequential()
             for index in range(3):
                 if index == 0:
-                    self.model.add(Conv2D(64, (3,3), (1,1), input_shape=self.model_input_shape)) 
+                    self.model.add(Conv2D(128, (3,3), (1,1), input_shape=self.model_input_shape)) 
                 else:
-                    self.model.add(Conv2D(64, (1,1), (1,1))) 
+                    self.model.add(Conv2D(128, (3,3), (1,1))) 
                 self.model.add(BatchNormalization())
                 self.model.add(ReLU())
             self.model.add(Flatten())

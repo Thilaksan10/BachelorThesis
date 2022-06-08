@@ -7,6 +7,7 @@ import numpy as np
 # mod used to control whether to generate the frame based or periodic tasks
 # mod == 0: frame-based
 # mod == 1: periodic
+# tasksets = gen.generate(ntasks, msets, processors * utli, res_num, 0.5, c_min, c_max, 1)
 def generate(nsets, msets, processors, num_resources, utilization, critical_min, critical_max, mod):
     # print(f'Processors: {processors}')
     # utilizations = uniform_utilizations(nsets, msets, processors, utilization) 
@@ -19,7 +20,11 @@ def generate(nsets, msets, processors, num_resources, utilization, critical_min,
 
     for _ in range(msets):
         utilizations.append(drs.drs(nsets, processors, upper_bounds, lower_bounds)) 
-    # print(utilizations)   
+    # # print(utilizations)   
+    # summer = 0
+    # for utilization in utilizations[0]:
+    #     summer += utilization
+    # print(f'Sum: {summer}')
     tasksets = []
     
     # bounds of the critical sections
