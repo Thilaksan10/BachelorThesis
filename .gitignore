@@ -12,3 +12,4 @@ Supervised-v6
 experiments/inputs
 tmp
 supervised_learning.py
+*.pkl
