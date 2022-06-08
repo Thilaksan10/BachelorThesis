@@ -31,7 +31,7 @@ def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli
 
 if __name__ == '__main__':
     # tasks per taskset
-    ntasks = 10
+    ntasks = 5
     # number of tasksets
     msets = 1
     # number of processors
@@ -45,7 +45,7 @@ if __name__ == '__main__':
 
     # sporadic setting 0 = Periodic, 1 = Sporadic
     SPORADIC = 0
-    mod = 0
+    mod = 1
 
     iterations = 10
     min_utli = 5
@@ -103,9 +103,11 @@ if __name__ == '__main__':
         'c_max': c_max,
         'subset': subset,
         'SPORADIC': SPORADIC,
+        'mod': mod,
     }
 
     scheduler = Scheduler(tasksets, settings)
+    print(scheduler.to_string())
     env = SchedulerEnv(scheduler)
     agent = Agent(n_actions=env.action_shape, input_shape=env.observation_shape, alpha=1e-5, n_tasks=ntasks, m_sets=msets, policy_layer_dims=[512, 1024, 2048, 1024, 512])
     agent.load_models()
@@ -129,6 +131,7 @@ if __name__ == '__main__':
                     'c_max': c_max,
                     'subset': subset,
                     'SPORADIC': SPORADIC,
+                    'mod': mod,
                 }
 
                 scheduler = Scheduler(tasksets, settings)
@@ -163,5 +166,5 @@ if __name__ == '__main__':
         plt.xlabel('Utilization in %')
         plt.ylabel('Acceptance Rate')
     plt.legend(resources_no)
-    plt.savefig('eval_framebased.png')
+    plt.savefig('eval_periodic.png')
     plt.show()

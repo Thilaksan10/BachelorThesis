@@ -6,8 +6,8 @@ import taskset_generator.generator as gen
 from tqdm import tqdm
 
 class SubJob:
-    def __init__(self, utilization, resource_id, period) -> None:
-        self.execution = utilization * period
+    def __init__(self, utilization, resource_id) -> None:
+        self.execution = utilization
         self.resource_id = resource_id
 
     # checks if sub job is a critical sub job or non-critical job
@@ -68,7 +68,7 @@ class Task:
         self.task_id = task_id
         self.segments = []
         for segment in segments:
-            self.segments.append(SubJob(utilization=segment[0], resource_id=segment[1], period=self.period))
+            self.segments.append(SubJob(utilization=segment[0], resource_id=segment[1]))
         self.released_job = Job(self.segments, self.period, 0, self.period, self.task_id)
 
     # checks if recently released job is ready to be added to the ready list
