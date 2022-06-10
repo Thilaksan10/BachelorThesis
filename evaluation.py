@@ -75,7 +75,7 @@ if __name__ == '__main__':
     subset = 1
 
     # sporadic setting 0 = Periodic, 1 = Sporadic
-    SPORADIC = 0
+    SPORADIC = 1
     mod = 1
 
     iterations = 10
@@ -173,11 +173,11 @@ if __name__ == '__main__':
                 score = 0
                 observation = env.state
                 while not done:
-                    # action = agent.choose_action_eval(observation.to_array())
+                    action = agent.choose_action_eval(observation.to_array())
                     # action = select_edf(observation)
-                    action = select_rate_monotonic(observation)
+                    # action = select_rate_monotonic(observation)
                     # print(action)
-                    state_, reward, done, info = env.step(action-1)
+                    state_, reward, done, info = env.step(action)
                     score += reward
                     observation = state_
                     # env.render()
@@ -202,5 +202,5 @@ if __name__ == '__main__':
         plt.xlabel('Utilization in %')
         plt.ylabel('Acceptance Rate')
     plt.legend(resources_no)
-    plt.savefig('eval_periodic-rm.png')
+    plt.savefig('eval_sporadic.png')
     plt.show()

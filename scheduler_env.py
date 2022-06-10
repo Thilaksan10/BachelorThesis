@@ -18,6 +18,7 @@ class SchedulerEnv(Env):
         self.subset = scheduler.subset
         self.SPORADIC = scheduler.SPORADIC
         self.mod = scheduler.mod
+        self.res_cntr = -1
 
         self.action_shape = self.ntasks * self.msets
         self.observation_shape = tf.convert_to_tensor(scheduler.to_array()).shape
@@ -84,7 +85,9 @@ class SchedulerEnv(Env):
     def reset(self):
         # generate new taskset with same setting
         # if won:
-        self.res_num = random.choice([1,2,4,8])
+        self.res_cntr += 1
+        res = [1,2,4,8]
+        self.res_num = res[self.res_cntr % 4]
         generate_tasksets(self.ntasks, self.msets, self.processor_num, self.res_num, self.c_min, self.c_max, self.subset, self.mod)
             # print('generate new taskets ...')
         # load newly generated taskset
