@@ -1,7 +1,9 @@
 from copy import deepcopy
 from operator import mod
 from mcts import TreeNode, MCTS
+from math import gcd
 import numpy as np
+import random
 import taskset_generator.generator as gen
 from tqdm import tqdm
 
@@ -63,19 +65,26 @@ class Job:
         return f'P: {self.period}, R: {self.release_time}, D: {self.deadline}, ID: {self.task_id} \n Jobs: {sub_jobs}'
 
 class Task:
-    def __init__(self, period, task_id, segments):
+    def __init__(self, period, task_id, segments, SPORADIC):
         self.period = period
         self.task_id = task_id
         self.segments = []
+        self.SPORADIC = SPORADIC
         for segment in segments:
             self.segments.append(SubJob(utilization=segment[0], resource_id=segment[1]))
-        self.released_job = Job(self.segments, self.period, 0, self.period, self.task_id)
+        if SPORADIC:
+            self.released_job = Job(self.segments, self.period, 0 + random.uniform(0, self.period), self.period, self.task_id)
+        else:
+            self.released_job = Job(self.segments, self.period, 0, self.period, self.task_id)
 
     # checks if recently released job is ready to be added to the ready list
     def release_job(self, time):
         if self.released_job.is_finished():
             if time >= self.released_job.release_time + self.period:
-                release_time = self.released_job.deadline
+                if not self.SPORADIC:
+                    release_time = self.released_job.deadline
+                else:
+                    release_time = self.released_job.deadline + random.uniform(0, self.period)
                 deadline = release_time + self.period
                 self.released_job = Job(self.segments, self.period, release_time, deadline, self.task_id)
                 return True
@@ -136,13 +145,19 @@ class Scheduler:
 
         self.hyper_period = self.calculate_hyper_period()
 
+    # hyperperiod is defined as least common multiple of all periods
     def calculate_hyper_period(self):
+        periods = []
         max = 1
         for taskset in self.tasksets:
             for task in taskset:
-                if task.period > max:
+                if max < task.period:
                     max = task.period
-        return max
+                periods.append(task.period)
+        lcm = 1
+        for period in periods:
+            lcm = lcm * period // gcd(lcm, period)
+        return lcm
 
     # check if a new job is released
     def new_job_released(self, previous_state):
@@ -188,6 +203,8 @@ class Scheduler:
                         # print(f'Next Release2: {next_release}')
                         next_release = float('inf')
                     next_arrival = min(next_arrival, next_release)
+                elif task.released_job.release_time > self.time and self.SPORADIC:
+                    next_arrival = min(task.released_job.release_time, next_arrival)
         return next_arrival
 
     def insert_in_waiting_list_edf(self, job):
@@ -439,16 +456,44 @@ class Scheduler:
             states = [(temp_state.execute(), 0)]
         return states
 
-    ''' 
+     
     def select_edf(self):
-        if self.ready_list:
-            earliest_deadline = self.ready_list[0]
-            for periodic_task in self.ready_list:
-                if earliest_deadline.tasks[earliest_deadline.index].deadline > periodic_task.tasks[periodic_task.index].deadline:
-                    earliest_deadline = periodic_task
-            return earliest_deadline
-        return None
-    '''
+        states = self.generate_states()
+        min_arg = 0
+        min_deadline = self.hyper_period + 1
+        for index, state in enumerate(states):
+            for taskset in self.tasksets:
+                for task in taskset:
+                    if task.task_id == state[1]:
+                        if min_deadline > task.released_job.deadline:
+                            min_arg = index
+                            min_deadline = task.released_job.deadline
+                        break
+
+        return states[min_arg][0]
+        # if self.ready_list:
+        #     earliest_deadline = self.ready_list[0]
+        #     for job in self.ready_list:
+        #         if earliest_deadline.deadline > job.deadline:
+        #             earliest_deadline = job
+            
+        # return None
+
+    def select_rate_monotonic(self):
+        states = self.generate_states()
+        min_arg = 0
+        min_period = self.hyper_period + 1
+        for index, state in enumerate(states):
+            for taskset in self.tasksets:
+                for task in taskset:
+                    if task.task_id == state[1]:
+                        if min_period > task.period:
+                            min_arg = index
+                            min_period = task.period
+                        break
+
+        return states[min_arg][0]
+    
 
     # check if all tasks are scheduled
     def all_tasks_scheduled(self):
@@ -469,20 +514,20 @@ class Scheduler:
 
         deadline_miss = False
         for job in self.ready_list:
-            if job.deadline < self.time:
+            if job.deadline <= self.time:
                 # score += 1000 * task.deadline
                 deadline_miss = True
                 break
                 #score -= self.time - job.deadline
         if self.processors['processor_1']:
-            if self.processors['processor_1'].deadline < self.time:
+            if self.processors['processor_1'].deadline <= self.time:
                 deadline_miss = True
         
             
         if not deadline_miss:
             score = 1
         else:
-            score = 0
+            score = -1
         return score
 
 
@@ -499,44 +544,45 @@ class Scheduler:
             # mcts selection of next job to execute
             # print(self.time < self.hyper_period)
             # print(best_move)
-            states = deepcopy(self).generate_states()
-            # print(f'# States : {len(states)}')
-            if len(states) == 1:
-                self = states[0][0]
-                if best_move:
-                    if self.to_string() not in best_move.children:
-                        # print('Node does not exist')
-                        new_node = TreeNode(self, states[0][1], best_move)
-                        best_move.children[self.to_string()] = new_node 
-                    else:
-                        # print('node already exists')
-                        new_node = best_move.children[self.to_string()]
-                else:
-                    # print('first Iteration')
-                    new_node = TreeNode(self, states[0][1], best_move)
-                best_move = new_node
-            else:
-                # case not first iteration of schedule loop
-                if best_move:
-                    # search for best move on already existing mct
-                    best_move = mcts.search(self, current_node=best_move)
+            # states = deepcopy(self).generate_states()
+            # # print(f'# States : {len(states)}')
+            # if len(states) == 1:
+            #     self = states[0][0]
+            #     if best_move:
+            #         if self.to_string() not in best_move.children:
+            #             # print('Node does not exist')
+            #             new_node = TreeNode(self, states[0][1], best_move)
+            #             best_move.children[self.to_string()] = new_node 
+            #         else:
+            #             # print('node already exists')
+            #             new_node = best_move.children[self.to_string()]
+            #     else:
+            #         # print('first Iteration')
+            #         new_node = TreeNode(self, states[0][1], best_move)
+            #     best_move = new_node
+            # else:
+            #     # case not first iteration of schedule loop
+            #     if best_move:
+            #         # search for best move on already existing mct
+            #         best_move = mcts.search(self, current_node=best_move)
                     
-                # case first iteration of schedule loop
-                else: 
-                    # search for best move on a new mct
-                    best_move = mcts.search(self)
-            self = best_move.scheduler
-            self.to_array()
+            #     # case first iteration of schedule loop
+            #     else: 
+            #         # search for best move on a new mct
+            #         best_move = mcts.search(self)
+            # self = best_move.scheduler
             # print(f'Children: {len(best_move.children)}')
             # print('--------------------------')
             # for children in best_move.children:
             #     print(best_move.children[children].scheduler.to_string())
             # print('--------------------------')
             # random selection of next task to execute
-            # states = self.generate_states()
-            # print(states)
-            # self = random.choice(states)[0]
-
+            states = self.generate_states()
+            print(states)
+            self = random.choice(states)[0]
+            print(self.to_string())
+            print(self.to_array())
+            input()
             # edf selection of next task to execute
             # periodic_task = self.select_edf()
             # self.execute_job(periodic_task)
@@ -576,6 +622,8 @@ class Scheduler:
             # print(self.to_string())
             # input()
             print(self.time)
+            print(self.to_string())
+            print(self.to_array())
 
                 
             # print(f'Score: {self.calculate_scores()}')
@@ -674,7 +722,7 @@ class Scheduler:
         return f'------------------------Schedule------------------------\n\nTasksets:\n{tasksets}\nTime: {self.time}\n{readylist}\n{resources}\n{processors}\n\n'
 
 def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod):
-    for i in range(15, 20, 5):
+    for i in range(5, 10, 5):
         utli = float(i / 100)
         tasksets_name = './experiments/inputs/input_task_periodic/' + str(subset) + '/tasksets_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(
             utli) + '_r' + str(res_num) + '_s' + str(c_min) + '_l' + str(c_max)
@@ -715,7 +763,7 @@ def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, 
 def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, SPORADIC):
     # job_sets = []
     task_sets = []
-    for i in range(15, 20, 5):
+    for i in range(5, 10, 5):
         utli = float(i / 100)
         tasksets_name = './experiments/inputs/input_task_periodic/' + str(subset) + '/tasksets_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(utli) + '_r' + str(res_num) + '_s' + str(c_min) + '_l' + str(c_max)  + '.npy'
         task_sets.append(np.load(tasksets_name, allow_pickle=True))
@@ -760,7 +808,7 @@ def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, SPOR
     for task_set in task_sets[0]:
         taskset = []
         for task in task_set:
-            taskset.append(Task(period=task[-1], task_id=task_id, segments=task[:-1]))
+            taskset.append(Task(period=task[-1], task_id=task_id, segments=task[:-1], SPORADIC=SPORADIC))
             task_id += 1
         tasksets.append(taskset)
 
@@ -782,54 +830,55 @@ if __name__ == '__main__':
 
     # sporadic setting 0 = Periodic, 1 = Sporadic
     SPORADIC = 0
-    mod = 0
+    mod = 1
 
     # Least common multiple of all Periods in tasksets
     wins = 0
     
-    for i in range(10):
-        generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod)
-        tasksets = load_tasksets(ntasks=ntasks, msets=msets, processors=processors, res_num=res_num, c_min=c_min, c_max=c_max, subset=subset, SPORADIC=SPORADIC)
-        settings = {
-            'ntasks': ntasks, 
-            'msets': msets, 
-            'processors': processors,
-            'res_num': res_num,
-            'c_min': c_min,
-            'c_max': c_max,
-            'subset': subset,
-            'SPORADIC': SPORADIC,
-            'mod': mod
-            }
+    # for i in range(10):
+    #     generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod)
+    #     tasksets = load_tasksets(ntasks=ntasks, msets=msets, processors=processors, res_num=res_num, c_min=c_min, c_max=c_max, subset=subset, SPORADIC=SPORADIC)
+    #     settings = {
+    #         'ntasks': ntasks, 
+    #         'msets': msets, 
+    #         'processors': processors,
+    #         'res_num': res_num,
+    #         'c_min': c_min,
+    #         'c_max': c_max,
+    #         'subset': subset,
+    #         'SPORADIC': SPORADIC,
+    #         'mod': mod
+    #         }
 
-        scheduler = Scheduler(tasksets, settings)
-        steps, final_state = scheduler.schedule_loop()
-        if final_state.calculate_scores() == 1:
-            wins += 1
+    #     scheduler = Scheduler(tasksets, settings)
+    #     steps, final_state = scheduler.schedule_loop()
+    #     if final_state.calculate_scores() == 1:
+    #         wins += 1
 
-        print(f'episode {i}, final score {final_state.calculate_scores()}, steps {steps}')
-    print(f'Won Games: {wins}')
-    # generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset)
-    # tasksets = load_tasksets(ntasks=ntasks, msets=msets, processors=processors, res_num=res_num, c_min=c_min, c_max=c_max, subset=subset, SPORADIC=SPORADIC)
-    # settings = {
-    #     'hyper_period': hyper_period,
-    #     'ntasks': ntasks, 
-    #     'msets': msets, 
-    #     'processors': processors,
-    #     'res_num': res_num,
-    #     'c_min': c_min,
-    #     'c_max': c_max,
-    #     'subset': subset,
-    #     'SPORADIC': SPORADIC,
-    # }
+    #     print(f'episode {i}, final score {final_state.calculate_scores()}, steps {steps}')
+    # print(f'Won Games: {wins}')
+    generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod)
+    tasksets = load_tasksets(ntasks=ntasks, msets=msets, processors=processors, res_num=res_num, c_min=c_min, c_max=c_max, subset=subset, SPORADIC=SPORADIC)
+    settings = {
+        'ntasks': ntasks, 
+        'msets': msets, 
+        'processors': processors,
+        'res_num': res_num,
+        'c_min': c_min,
+        'c_max': c_max,
+        'subset': subset,
+        'SPORADIC': SPORADIC,
+        'mod': mod,
+    }
 
-    # scheduler = Scheduler(tasksets, settings)
-    # for taskset in scheduler.tasksets:
-    #     for task in taskset:
-    #         list = task.released_job.to_list(0, 0, 0, scheduler.time)
-    #         print(len(list))
+    scheduler = Scheduler(tasksets, settings)
+    for taskset in scheduler.tasksets:
+        for task in taskset:
+            list = task.released_job.to_list(0, 0, 0, scheduler.time)
+            print(len(list))
 
-    # # print('\n-------------------------------------\n')
-    
-    # scheduler.to_array()
+    # print('\n-------------------------------------\n')
+    print(scheduler.to_string())
+    print(scheduler.to_array())
     # scheduler.schedule_loop()
+    # print(scheduler.select_edf().to_string())

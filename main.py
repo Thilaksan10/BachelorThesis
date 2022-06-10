@@ -11,7 +11,7 @@ import csv
 
 if __name__ == '__main__':
     # tasks per taskset
-    ntasks = 10
+    ntasks = 5
     # number of tasksets
     msets = 1
     # number of processors
@@ -24,14 +24,12 @@ if __name__ == '__main__':
     subset = 1
 
     # sporadic setting 0 = Periodic, 1 = Sporadic
-    SPORADIC = 0
-    hyper_period = 10
-    mod = 0
+    SPORADIC = 1
+    mod = 1
 
     generate_tasksets(ntasks=ntasks, msets=msets, processors=processors, res_num=res_num, c_min=c_min, c_max=c_max, subset=subset, mod=mod)
     tasksets = load_tasksets(ntasks=ntasks, msets=msets, processors=processors, res_num=res_num, c_min=c_min, c_max=c_max, subset=subset, SPORADIC=SPORADIC)
     settings = {
-        'hyper_period': hyper_period,
         'ntasks': ntasks, 
         'msets': msets, 
         'processors': processors,
@@ -79,7 +77,7 @@ if __name__ == '__main__':
     policy-10x1-multiple_resources: 0 mcts: 10, 5, lr: 1e-5, u: 10%
     
     '''
-    # best_score = 24.18
+    # best_score = 2400.18
     EPISODES = 1000
     wons = 0
     lost = 0
@@ -113,8 +111,6 @@ if __name__ == '__main__':
             # step_score.append(reward)
             # if step % 1000 == 0:
             #     print(f'Episode: {i}, Step: {step}, 1000 steps average {np.mean(step_score[-1000:])}')
-            if reward == -1:
-                invalid += 1
             score += reward
             observation = state_
             # if reward != -10000:
@@ -137,6 +133,8 @@ if __name__ == '__main__':
         if avg_score > best_score and i >= 10:
             best_score = avg_score
             agent.save_models()
+        
+        invalid = info['invalid']
         # if reward == 1:
         #     wons += 1
         # elif reward == 0:

@@ -1,3 +1,4 @@
+from math import gamma
 import os
 import pickle
 import tensorflow as tf
@@ -62,9 +63,9 @@ class PolicyNetwork(keras.Model):
             self.model = tf.keras.Sequential()
             for index in range(3):
                 if index == 0:
-                    self.model.add(Conv2D(128, (3,3), (1,1), input_shape=self.model_input_shape)) 
+                    self.model.add(Conv2D(64, (3,3), (1,1), input_shape=self.model_input_shape)) 
                 else:
-                    self.model.add(Conv2D(128, (3,3), (1,1))) 
+                    self.model.add(Conv2D(64, (1,1), (1,1))) 
                 self.model.add(BatchNormalization())
                 self.model.add(ReLU())
             self.model.add(Flatten())
@@ -86,10 +87,11 @@ class Agent:
         self.batch_size = 64
         self.m_sets = m_sets
         self.n_tasks = n_tasks
+        self.alpha = alpha
 
         self.policy_network = PolicyNetwork(layer_dims=policy_layer_dims, n_actions=n_actions, input_shape=input_shape, n_tasks=n_tasks, m_sets=m_sets)
 
-        self.policy_network.compile(optimizer=Adam(learning_rate=alpha))
+        self.policy_network.compile(optimizer=Adam(learning_rate=alpha, clipnorm=1.))
         self.mcts = MCTS()
         if load_memory:
             with open(f'replay_buffer-{n_tasks}x{m_sets}.pkl', 'rb') as f:
@@ -101,7 +103,7 @@ class Agent:
     def choose_action(self, observation):
         state = tf.convert_to_tensor([[observation]])
         probs = self.policy_network(state)
-        # print(probs)
+        print(probs)
         action_probabilites = tfp.distributions.Categorical(probs=probs)
        
         action = action_probabilites.sample()
@@ -113,7 +115,7 @@ class Agent:
     def choose_action_eval(self, observation):
         state = tf.convert_to_tensor([[observation]])
         probs = self.policy_network(state)
-
+        # print(probs)
         self.action = tf.math.argmax(probs, axis=1)
         # print(self.action)
         return self.action.numpy()[0]
@@ -160,6 +162,10 @@ class Agent:
                 self.mcts.root = None
 
             return state_value, state_value_
+
+        if self.memory.mem_cntr % self.batch_size == 0:
+            self.alpha = self.alpha * self.gamma
+            self.policy_network.compile(optimizer=Adam(learning_rate=self.alpha, clipnorm=1.))
 
         states, states_values, actions, rewards, new_states, new_states_values, dones = self.memory.sample_buffer(self.batch_size)
         reward = tf.convert_to_tensor([reward], dtype=tf.float32)
@@ -236,16 +242,27 @@ class Agent:
 
             target = []
             for j in range(self.batch_size):
-                actions_probs = tfp.distributions.Categorical(probs=probs[j])
-            
-                log_prob = actions_probs.log_prob(actions[j])
+                # actions_probs = tfp.distributions.Categorical(probs=probs[j])
+                
+                # log_prob = actions_probs.log_prob(actions[j])
+                # print(f'tfp: {log_prob}')
+                # print(probs[j][0])
+                # print(actions[j])
+                # print(f'manual: {log_prob_2}')
                 # print(f'Log Prob: {log_prob}')
                 delta = rewards[j] + self.gamma * new_states_values[j] * (1-dones[j]) - states_values[j]
                 # print(f'Delta: {delta}')
-                loss = -log_prob * delta
+                if rewards[j] < 0:
+                    log_prob = tf.math.log(1 - probs[j][actions[j]])
+                    loss = -1 * (1 - log_prob) * delta
+                else:
+                    log_prob = tf.math.log(probs[j][actions[j]])
+                    loss = -log_prob * delta
                 target.append(loss)
             
+            # print(f'current Loss: {target[-1]}')
             policy_loss = tf.reduce_mean(tf.convert_to_tensor(target))
+            # policy_loss = tf.convert_to_tensor(target)
             # print(f'Loss {policy_loss}')
             # print('----------------------')
             # input()

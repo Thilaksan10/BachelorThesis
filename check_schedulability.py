@@ -23,7 +23,7 @@ def scheduling_time(scheduler):
 
 if __name__ == '__main__':
     # tasks per taskset
-    ntasks = 10
+    ntasks = 5
     # number of tasksets
     msets = 1
     # number of processors
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     # Least common multiple of all Periods in tasksets
     hyper_period = 10
     possible = 0
-    mod = 0
+    mod = 1
     iterations = 1000
     for i in range(iterations):
         # num of resources
@@ -69,7 +69,9 @@ if __name__ == '__main__':
                     computation += segment.execution
                 time += (scheduler.hyper_period/task.period) * computation 
 
-        print(f'Episode {i} Time: {time}')
+        print(f'Episode {i} Hyperperiod: {scheduler.hyper_period} Time: {time}')
+        print(scheduler.to_string())
+        input()
         if time < scheduler.hyper_period:
             possible += 1
 

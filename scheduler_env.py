@@ -22,6 +22,9 @@ class SchedulerEnv(Env):
         self.action_shape = self.ntasks * self.msets
         self.observation_shape = tf.convert_to_tensor(scheduler.to_array()).shape
         self.state = scheduler
+        while deepcopy(self.state).generate_states()[0][1] == 0:
+            self.state = deepcopy(self.state).generate_states()[0][0]
+            self.time = self.state.time
 
     def step(self, action):
         # check if chosen action is a possible action and state to new state
@@ -52,6 +55,7 @@ class SchedulerEnv(Env):
         # calculate reward
         if possible_action:
             reward = self.state.calculate_scores()
+            invalid = 0
         else:
             # prob = []
             # for n_state in n_states:
@@ -60,6 +64,7 @@ class SchedulerEnv(Env):
             # self.state = random.choice(n_states)[0]
             # self.time = self.state.time
             reward = -1
+            invalid = 1
             
 
         # check if all tasks are schedules or hyperperiod reached
@@ -69,7 +74,7 @@ class SchedulerEnv(Env):
             done = False
 
         # set place holder for info
-        info = {}
+        info = {'invalid': invalid}
 
         return self.state, reward, done, info
 
@@ -98,7 +103,7 @@ class SchedulerEnv(Env):
         }
         self.state = Scheduler(tasksets, settings)
 
-        while len(deepcopy(self.state).generate_states()) == 1:
+        while deepcopy(self.state).generate_states()[0][1] == 0:
             self.state = deepcopy(self.state).generate_states()[0][0]
             self.time = self.state.time
     

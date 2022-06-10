@@ -23,11 +23,42 @@ def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli
     for task_set in task_sets:
         taskset = []
         for task in task_set:
-            taskset.append(Task(period=task[-1], task_id=task_id, segments=task[:-1]))
+            taskset.append(Task(period=task[-1], task_id=task_id, segments=task[:-1], SPORADIC=SPORADIC))
             task_id += 1
         tasksets.append(taskset)
 
     return tasksets
+
+def select_edf(scheduler):
+        states = scheduler.generate_states()
+        deadlines = []
+        min_arg = 0
+        min_deadline = scheduler.hyper_period + 1
+        for index, state in enumerate(states):
+            for taskset in scheduler.tasksets:
+                for task in taskset:
+                    if task.task_id == state[1]:
+                        if min_deadline > task.released_job.deadline:
+                            min_arg = index
+                            min_deadline = task.released_job.deadline
+                        break
+
+        return states[min_arg][1]
+
+def select_rate_monotonic(scheduler):
+        states = scheduler.generate_states()
+        min_arg = 0
+        min_period = scheduler.hyper_period + 1
+        for index, state in enumerate(states):
+            for taskset in scheduler.tasksets:
+                for task in taskset:
+                    if task.task_id == state[1]:
+                        if min_period > task.period:
+                            min_arg = index
+                            min_period = task.period
+                        break
+
+        return states[min_arg][1]
 
 if __name__ == '__main__':
     # tasks per taskset
@@ -41,7 +72,7 @@ if __name__ == '__main__':
 
     c_min = 0.05
     c_max = 0.1
-    subset = 2
+    subset = 1
 
     # sporadic setting 0 = Periodic, 1 = Sporadic
     SPORADIC = 0
@@ -51,7 +82,7 @@ if __name__ == '__main__':
     min_utli = 5
     max_utli = 105
 
-    generate = 1
+    generate = 0
 
     if generate:
         for res_num in resources_no:
@@ -136,23 +167,28 @@ if __name__ == '__main__':
 
                 scheduler = Scheduler(tasksets, settings)
                 env = SchedulerEnv(scheduler)
+                # env.render()
                 min_time = scheduling_time(scheduler)
                 done = False
                 score = 0
                 observation = env.state
                 while not done:
-                    action = agent.choose_action_eval(observation.to_array())
-                    state_, reward, done, info = env.step(action)
+                    # action = agent.choose_action_eval(observation.to_array())
+                    # action = select_edf(observation)
+                    action = select_rate_monotonic(observation)
+                    # print(action)
+                    state_, reward, done, info = env.step(action-1)
                     score += reward
                     observation = state_
+                    # env.render()
+                    # input()
                 if reward == 1:
                     won += 1
-                if min_time > scheduler.hyper_period and reward == 1:
-                    print(observation.to_string())
-                    for job in observation.ready_list:
-                        print(f'Task ID: {job.task_id}')
-                    print(observation.calculate_scores())
-                    # input()
+                # if min_time > scheduler.hyper_period and reward == 1:
+                #     print(observation.to_string())
+                #     for job in observation.ready_list:
+                #         print(f'Task ID: {job.task_id}')
+                #     print(observation.calculate_scores())
 
                 print(f'res_num {res_num}, utilization {utli}, taskset {iteration}, final_score {reward}, cummulative score {score}, scheduling_time {min_time}')
             eval_utli.append(won/iterations)
@@ -166,5 +202,5 @@ if __name__ == '__main__':
         plt.xlabel('Utilization in %')
         plt.ylabel('Acceptance Rate')
     plt.legend(resources_no)
-    plt.savefig('eval_periodic.png')
+    plt.savefig('eval_periodic-rm.png')
     plt.show()

@@ -11,7 +11,7 @@ class TreeNode:
         self.scheduler = deepcopy(scheduler)
 
         # init is node terminal flag
-        if self.scheduler.all_tasks_scheduled() or self.scheduler.calculate_scores() <= 0:
+        if self.scheduler.all_tasks_scheduled() or self.scheduler.time >= 10 or self.scheduler.calculate_scores() <= 0:
             # we have terminal node
             self.is_terminal = True
         else:
@@ -126,7 +126,7 @@ class MCTS:
         coefficient = 1
         
         # simulate until all tasks are scheduled or a certain iteartion count is reached
-        while not scheduler.all_tasks_scheduled() and iterations < 5 and not score <= 0:
+        while not scheduler.all_tasks_scheduled() and iterations <= 25 and not score <= 0:
             # queue all arrived tasks to 'ready list
             
             states = scheduler.generate_states()
