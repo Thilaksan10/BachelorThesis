@@ -78,7 +78,7 @@ if __name__ == '__main__':
     
     '''
     # best_score = 2400.18
-    EPISODES = 1000
+    EPISODES = 1500
     wons = 0
     lost = 0
     invalids = 0
@@ -130,7 +130,7 @@ if __name__ == '__main__':
         avg_score = np.mean(score_history[-100:])
         avg_score_history.append(avg_score)
             
-        if avg_score > best_score and i >= 10:
+        if avg_score > best_score or i % 10 == 0:
             best_score = avg_score
             agent.save_models()
         

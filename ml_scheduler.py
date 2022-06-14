@@ -1,5 +1,6 @@
 from copy import deepcopy
 from operator import mod
+from platform import release
 from mcts import TreeNode, MCTS
 from math import gcd
 import numpy as np
@@ -73,7 +74,8 @@ class Task:
         for segment in segments:
             self.segments.append(SubJob(utilization=segment[0], resource_id=segment[1]))
         if SPORADIC:
-            self.released_job = Job(self.segments, self.period, 0 + random.uniform(0, self.period), self.period, self.task_id)
+            release_time = 0 + random.uniform(0, self.period)
+            self.released_job = Job(self.segments, self.period, release_time, release_time + self.period, self.task_id)
         else:
             self.released_job = Job(self.segments, self.period, 0, self.period, self.task_id)
 
@@ -203,8 +205,10 @@ class Scheduler:
                         # print(f'Next Release2: {next_release}')
                         next_release = float('inf')
                     next_arrival = min(next_arrival, next_release)
-                elif task.released_job.release_time > self.time and self.SPORADIC:
-                    next_arrival = min(task.released_job.release_time, next_arrival)
+                # else:
+                #     next_arrival = min(task.get_current_job().release_time, next_arrival)
+                elif task.get_current_job().release_time > self.time:
+                    next_arrival = min(task.get_current_job().release_time, next_arrival)
         return next_arrival
 
     def insert_in_waiting_list_edf(self, job):
@@ -238,11 +242,9 @@ class Scheduler:
                 # case resource could be acquired 
                 if self.resources[f'resource_{sub_job.resource_id + 1}'] == None:
                     # case job acquires resource
-                    if len(self.waiting_lists[f'resource_{sub_job.resource_id + 1}']) == 0:
-                        self.lock_resource(job)
-                    else:
-                        if job in self.waiting_lists[f'resource_{sub_job.resource_id + 1}']:
-                            self.waiting_lists[f'resource_{sub_job.resource_id + 1}'].remove(job)
+                    if job in self.waiting_lists[f'resource_{sub_job.resource_id + 1}']:
+                        self.waiting_lists[f'resource_{sub_job.resource_id + 1}'].remove(job)
+                    self.lock_resource(job)
                 # case resources is already acquired by another job
                 else:
                     if self.resources[f'resource_{sub_job.resource_id + 1}'] != job:
@@ -527,7 +529,7 @@ class Scheduler:
         if not deadline_miss:
             score = 1
         else:
-            score = -1
+            score = -2
         return score
 
 
@@ -538,7 +540,8 @@ class Scheduler:
         mcts = MCTS()
         best_move = None
         # inputs = [9, 9, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 6, 6, 5, 6, 6, 6, 4, 5, 5, 5, 5, 5, 2, 1, 0, 3, 3, 4, 4, 3, 0, 0, 3, 4, 4, 4, 4, 4, 4, 2, 3, 3, 3, 3, 3, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 0, 2, 0, 5, 6, 5, 5, 4, 4, 3, 3, 2, 2, 1, 1, 0, 6]
-        # i = 0
+        inputs = []
+        i = 0
         steps = 0
         while self.time < self.hyper_period and self.calculate_scores() > 0:
             # mcts selection of next job to execute
@@ -577,41 +580,44 @@ class Scheduler:
             #     print(best_move.children[children].scheduler.to_string())
             # print('--------------------------')
             # random selection of next task to execute
-            states = self.generate_states()
-            print(states)
-            self = random.choice(states)[0]
-            print(self.to_string())
-            print(self.to_array())
-            input()
+            # states = self.generate_states()
+            # print(states)
+            # self = random.choice(states)[0]
+            # print(self.to_string())
+            # print(self.to_array())
+            # input()
             # edf selection of next task to execute
             # periodic_task = self.select_edf()
             # self.execute_job(periodic_task)
 
             # choose job to execute section
-            # states = self.generate_states()
-            # print(states)
-            # print()
-            # if i < len(inputs):
-            #     num = inputs[i]
-            #     i += 1
-            #     self = states[int(num)][0]
-            # else:
-            #     conf = 'no'
-            #     while conf == 'no':
-            #         num = input(f'Enter number from 0 - {len(states)-1}: ')
-            #         while num == '' or int(num) >= len(states):
-            #             print('inputted number is to high or wrong')
-            #             num = input(f'Enter number from 0 - {len(states)-1}: ')
+            states = self.generate_states()
+            print(states)
+            print()
+            if i < len(inputs):
+                num = inputs[i]
+                i += 1
+                self = states[int(num)][0]
+            else:
+                conf = 'no'
+                if len(states) == 1:
+                    self = random.choice(states)[0]
+                else:
+                    while conf == 'no':
+                        num = input(f'Enter number from 0 - {len(states)-1}: ')
+                        while num == '' or int(num) >= len(states):
+                            print('inputted number is to high or wrong')
+                            num = input(f'Enter number from 0 - {len(states)-1}: ')
 
-            #         print('_____________________________________________________________________________')
-            #         print()
-            #         print(states[int(num)][0].to_string())
-            #         conf = input('Do you want to execute this state? ')
-            #     self = states[int(num)][0]
-            #     inputs.append(int(num))
-            #     i += 1
-            #     print(inputs)
-           
+                        print('_____________________________________________________________________________')
+                        print()
+                        print(states[int(num)][0].to_string())
+                        conf = input('Do you want to execute this state? ')
+                    self = states[int(num)][0]
+                    inputs.append(int(num))
+                    i += 1
+                    print(inputs)
+            
             # self.execute(self.ready_list[int(num)])
             # print(f'BEST MOVE SCORE: {best_move.score}')
             # print(f'SCORE: {self.calculate_score()}')
@@ -619,11 +625,11 @@ class Scheduler:
 
 
             # print(16*'-' + 'End of Timeslot' + 16*'-')
-            # print(self.to_string())
-            # input()
-            print(self.time)
             print(self.to_string())
-            print(self.to_array())
+            input()
+            # print(self.time)
+            # print(self.to_string())
+            # print(self.to_array())
 
                 
             # print(f'Score: {self.calculate_scores()}')
@@ -722,7 +728,7 @@ class Scheduler:
         return f'------------------------Schedule------------------------\n\nTasksets:\n{tasksets}\nTime: {self.time}\n{readylist}\n{resources}\n{processors}\n\n'
 
 def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod):
-    for i in range(5, 10, 5):
+    for i in range(100, 105, 5):
         utli = float(i / 100)
         tasksets_name = './experiments/inputs/input_task_periodic/' + str(subset) + '/tasksets_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(
             utli) + '_r' + str(res_num) + '_s' + str(c_min) + '_l' + str(c_max)
@@ -763,7 +769,7 @@ def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, 
 def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, SPORADIC):
     # job_sets = []
     task_sets = []
-    for i in range(5, 10, 5):
+    for i in range(100, 105, 5):
         utli = float(i / 100)
         tasksets_name = './experiments/inputs/input_task_periodic/' + str(subset) + '/tasksets_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(utli) + '_r' + str(res_num) + '_s' + str(c_min) + '_l' + str(c_max)  + '.npy'
         task_sets.append(np.load(tasksets_name, allow_pickle=True))
@@ -816,7 +822,7 @@ def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, SPOR
 
 if __name__ == '__main__':
     # tasks per taskset
-    ntasks = 10
+    ntasks = 5
     # number of tasksets
     msets = 1
     # number of processors
@@ -829,7 +835,7 @@ if __name__ == '__main__':
     subset = 1
 
     # sporadic setting 0 = Periodic, 1 = Sporadic
-    SPORADIC = 0
+    SPORADIC = 1
     mod = 1
 
     # Least common multiple of all Periods in tasksets
@@ -879,6 +885,6 @@ if __name__ == '__main__':
 
     # print('\n-------------------------------------\n')
     print(scheduler.to_string())
-    print(scheduler.to_array())
-    # scheduler.schedule_loop()
+    # print(scheduler.to_array())
+    scheduler.schedule_loop()
     # print(scheduler.select_edf().to_string())

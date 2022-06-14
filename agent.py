@@ -139,24 +139,24 @@ class Agent:
             if self.mcts.root:
                 if state.to_string() == self.mcts.root.scheduler.to_string():
                     _ = self.mcts.search(state, self.mcts.root)
-                    state_value = tf.math.tanh([float(self.mcts.root.score)])
+                    state_value = tf.math.sigmoid([float(self.mcts.root.score)])
                     # print('Yeah')
                 else:
                     _ = self.mcts.search(state)
-                    state_value = tf.math.tanh([float(self.mcts.root.score)])
+                    state_value = tf.math.sigmoid([float(self.mcts.root.score)])
             else:
                 _ = self.mcts.search(state)
-                state_value = tf.math.tanh([float(self.mcts.root.score)])
+                state_value = tf.math.sigmoid([float(self.mcts.root.score)])
 
             if state_.to_string() not in self.mcts.root.children:
                 if state.to_string() != state_.to_string():
                     _ = self.mcts.search(state_)
-                    state_value_ = tf.math.tanh([float(self.mcts.root.score)])
+                    state_value_ = tf.math.sigmoid([float(self.mcts.root.score)])
                 else:
-                    state_value_ = tf.math.tanh([float(-1)])
+                    state_value_ = tf.math.sigmoid([float(-1)])
             else:
                 _ = self.mcts.search(state_, self.mcts.root.children[state_.to_string()])
-                state_value_ = tf.math.tanh([float(self.mcts.root.score)])
+                state_value_ = tf.math.sigmoid([float(self.mcts.root.score)])
 
             if done:
                 self.mcts.root = None
@@ -190,14 +190,14 @@ class Agent:
             if self.mcts.root:
                 if state.to_string() == self.mcts.root.scheduler.to_string():
                     _ = self.mcts.search(state, self.mcts.root)
-                    state_value = tf.math.tanh([float(self.mcts.root.score)])
+                    state_value = tf.math.sigmoid([float(self.mcts.root.score)])
                     # print('Yeah')
                 else:
                     _ = self.mcts.search(state)
-                    state_value = tf.math.tanh([float(self.mcts.root.score)])
+                    state_value = tf.math.sigmoid([float(self.mcts.root.score)])
             else:
                 _ = self.mcts.search(state)
-                state_value = tf.math.tanh([float(self.mcts.root.score)])
+                state_value = tf.math.sigmoid([float(self.mcts.root.score)])
                 # print('no')
             # print(states_values.shape)
             # print(state_value.shape)
@@ -205,7 +205,7 @@ class Agent:
             # print(state.to_string())
             # print(state_.to_string())
             # print(len(self.mcts.root.children))
-            # state_value = tf.math.tanh([float(self.mcts.root.score)])
+            # state_value = tf.math.sigmoid([float(self.mcts.root.score)])
             # print(f'Current State')
             # print(f'Current State Value: {state_value}')
             # print(float(self.mcts.root.score))
@@ -213,12 +213,12 @@ class Agent:
             if state_.to_string() not in self.mcts.root.children:
                 if state.to_string() != state_.to_string():
                     _ = self.mcts.search(state_)
-                    state_value_ = tf.math.tanh([float(self.mcts.root.score)])
+                    state_value_ = tf.math.sigmoid([float(self.mcts.root.score)])
                 else:
-                    state_value_ = tf.math.tanh([float(-1)])
+                    state_value_ = tf.math.sigmoid([float(-1)])
             else:
                 _ = self.mcts.search(state_, self.mcts.root.children[state_.to_string()])
-                state_value_ = tf.math.tanh([float(self.mcts.root.score)])
+                state_value_ = tf.math.sigmoid([float(self.mcts.root.score)])
             # print(new_states_values.shape)
             # print(state_value_.shape)
             new_states_values = tf.concat(axis=-1, values=[new_states_values, state_value_])

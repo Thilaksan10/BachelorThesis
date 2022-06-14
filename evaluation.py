@@ -75,7 +75,7 @@ if __name__ == '__main__':
     subset = 1
 
     # sporadic setting 0 = Periodic, 1 = Sporadic
-    SPORADIC = 1
+    SPORADIC = 0
     mod = 1
 
     iterations = 10
@@ -144,7 +144,7 @@ if __name__ == '__main__':
     agent.load_models()
     print(agent.policy_network.checkpoint_dir)
 
-    eval_list = []
+    eval_list_agent = []
 
     for res_num in resources_no:
         eval_utli = []
@@ -179,9 +179,67 @@ if __name__ == '__main__':
                     # print(action)
                     state_, reward, done, info = env.step(action)
                     score += reward
-                    observation = state_
                     # env.render()
-                    # input()
+                    # if observation.to_string() == state_.to_string() and not info['invalid']:
+                    #     input()
+                    observation = state_
+                if reward == 1:
+                    won += 1
+                if info['invalid']:
+                    invalid = 1
+                else:
+                    invalid = 0
+                # if min_time > scheduler.hyper_period and reward == 1:
+                #     print(observation.to_string())
+                #     for job in observation.ready_list:
+                #         print(f'Task ID: {job.task_id}')
+                #     print(observation.calculate_scores())
+
+                print(f'res_num {res_num}, utilization {utli}, taskset {iteration}, invalid {invalid}, final_score {reward}, cummulative score {score}, scheduling_time {min_time}')
+            eval_utli.append(won/iterations)
+        eval_list_agent.append(eval_utli)
+
+    eval_list_edf = []
+
+    for res_num in resources_no:
+        eval_utli = []
+        for i in range(min_utli, max_utli, 5):
+            utli = float(i/100)
+            won = 0
+            for iteration in range(iterations):
+                tasksets = load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli, SPORADIC, iteration+1)
+                settings = {
+                    'ntasks': ntasks, 
+                    'msets': msets, 
+                    'processors': processors,
+                    'res_num': res_num,
+                    'c_min': c_min,
+                    'c_max': c_max,
+                    'subset': subset,
+                    'SPORADIC': SPORADIC,
+                    'mod': mod,
+                }
+
+                scheduler = Scheduler(tasksets, settings)
+                env = SchedulerEnv(scheduler)
+                
+                # env.render()
+                min_time = scheduling_time(scheduler)
+                done = False
+                score = 0
+                observation = env.state
+                while not done:
+                    # action = agent.choose_action_eval(observation.to_array())
+                    action = select_edf(observation)
+                    # action = select_rate_monotonic(observation)
+                    # print(action)
+                    state_, reward, done, info = env.step(action-1)
+                    score += reward
+                    # env.render()
+                    # if observation.to_string() == state_.to_string() and not info['invalid']:
+                    #     input()
+                    
+                    observation = state_
                 if reward == 1:
                     won += 1
                 # if min_time > scheduler.hyper_period and reward == 1:
@@ -192,15 +250,116 @@ if __name__ == '__main__':
 
                 print(f'res_num {res_num}, utilization {utli}, taskset {iteration}, final_score {reward}, cummulative score {score}, scheduling_time {min_time}')
             eval_utli.append(won/iterations)
-        eval_list.append(eval_utli)
+        eval_list_edf.append(eval_utli)
+
+    eval_list_rm = []
+
+    for res_num in resources_no:
+        eval_utli = []
+        for i in range(min_utli, max_utli, 5):
+            utli = float(i/100)
+            won = 0
+            for iteration in range(iterations):
+                tasksets = load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli, SPORADIC, iteration+1)
+                settings = {
+                    'ntasks': ntasks, 
+                    'msets': msets, 
+                    'processors': processors,
+                    'res_num': res_num,
+                    'c_min': c_min,
+                    'c_max': c_max,
+                    'subset': subset,
+                    'SPORADIC': SPORADIC,
+                    'mod': mod,
+                }
+
+                scheduler = Scheduler(tasksets, settings)
+                env = SchedulerEnv(scheduler)
+                # env.render()
+                min_time = scheduling_time(scheduler)
+                done = False
+                score = 0
+                observation = env.state
+                while not done:
+                    # action = agent.choose_action_eval(observation.to_array())
+                    # action = select_edf(observation)
+                    action = select_rate_monotonic(observation)
+                    # print(action)
+                    state_, reward, done, info = env.step(action-1)
+                    score += reward
+                    # env.render()
+                    # if observation.to_string() == state_.to_string() and not info['invalid']:
+                    #     input()
+                    observation = state_
+                    
+                if reward == 1:
+                    won += 1
+                # if min_time > scheduler.hyper_period and reward == 1:
+                #     print(observation.to_string())
+                #     for job in observation.ready_list:
+                #         print(f'Task ID: {job.task_id}')
+                #     print(observation.calculate_scores())
+
+                print(f'res_num {res_num}, utilization {utli}, taskset {iteration}, final_score {reward}, cummulative score {score}, scheduling_time {min_time}')
+            eval_utli.append(won/iterations)
+        eval_list_rm.append(eval_utli)
    
-    agent.save_models()
-    print(eval_list)
-    for k, eval_utli in enumerate(eval_list): 
-        plt.title(f'Acceptance Rate of Agent for n ressources')
-        plt.plot(range(5, max_utli, 5), eval_utli)
+    print(eval_list_agent)
+    print(eval_list_edf)
+    print(eval_list_rm)
+
+    for k, _ in enumerate(resources_no): 
+        plt.title(f'Acceptance Rate of Agent for {2**k} resources')
+        plt.plot(range(min_utli, max_utli, 5), eval_list_agent[k])
+        plt.plot(range(min_utli, max_utli, 5), eval_list_edf[k])
+        plt.plot(range(min_utli, max_utli, 5), eval_list_rm[k])
         plt.xlabel('Utilization in %')
         plt.ylabel('Acceptance Rate')
-    plt.legend(resources_no)
-    plt.savefig('eval_sporadic.png')
+        plt.legend(['Agent', 'EDF', 'RM'])
+        if SPORADIC:
+            plt.savefig(f'eval/sporadic/eval-sporadic-{2**k}-resources.png')
+        elif not mod:
+            plt.savefig(f'eval/framebased/eval-framebased-{2**k}-resources.png')
+        else:
+            plt.savefig(f'eval/periodic/eval_periodic-{2**k}-resources.png')
+        plt.show()
+
+    eval_mix_agent = []
+    for m, _ in enumerate(eval_list_agent[0]):
+        sum = 0
+        for eval_utli in eval_list_agent:
+            sum += eval_utli[m]
+        sum = sum / len(eval_list_agent)
+        eval_mix_agent.append(sum)
+
+    eval_mix_edf = []
+    for m, _ in enumerate(eval_list_edf[0]):
+        sum = 0
+        for eval_utli in eval_list_edf:
+            sum += eval_utli[m]
+        sum = sum / len(eval_list_edf)
+        eval_mix_edf.append(sum)
+
+    eval_mix_rm = []
+    for m, _ in enumerate(eval_list_rm[0]):
+        sum = 0
+        for eval_utli in eval_list_rm:
+            sum += eval_utli[m]
+        sum = sum / len(eval_list_rm)
+        eval_mix_rm.append(sum)
+
+    plt.title(f'Acceptance Rate of Agent for mix resources')
+    plt.plot(range(min_utli, max_utli, 5), eval_mix_agent)
+    plt.plot(range(min_utli, max_utli, 5), eval_mix_edf)
+    plt.plot(range(min_utli, max_utli, 5), eval_mix_rm)
+    plt.xlabel('Utilization in %')
+    plt.ylabel('Acceptance Rate')
+    plt.legend(['Agent', 'EDF', 'RM'])
+    if SPORADIC:
+        plt.savefig(f'eval/sporadic/eval-sporadic-mixed-resources.png')
+    elif not mod:
+        plt.savefig(f'eval/framebased/eval-framebased-mixed-resources.png')
+    else:
+        plt.savefig(f'eval/periodic/eval_periodic-mixed-resources.png')
+    
     plt.show()

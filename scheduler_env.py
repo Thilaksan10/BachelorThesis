@@ -81,14 +81,16 @@ class SchedulerEnv(Env):
 
     def render(self):
         print(self.state.to_string())
+        # print(deepcopy(self.state).generate_states())
 
     def reset(self):
         # generate new taskset with same setting
         # if won:
         self.res_cntr += 1
         res = [1,2,4,8]
-        self.res_num = res[self.res_cntr % 4]
-        generate_tasksets(self.ntasks, self.msets, self.processor_num, self.res_num, self.c_min, self.c_max, self.subset, self.mod)
+        # self.res_num = res[self.res_cntr % 4]
+        self.res_num = 1
+        # generate_tasksets(self.ntasks, self.msets, self.processor_num, self.res_num, self.c_min, self.c_max, self.subset, self.mod)
             # print('generate new taskets ...')
         # load newly generated taskset
         tasksets = load_tasksets(self.ntasks, self.msets, self.processor_num, self.res_num, self.c_min, self.c_max, self.subset, self.SPORADIC)
