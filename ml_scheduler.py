@@ -159,6 +159,8 @@ class Scheduler:
         lcm = 1
         for period in periods:
             lcm = lcm * period // gcd(lcm, period)
+        if self.SPORADIC:
+            lcm *= 2
         return lcm
 
     # check if a new job is released
@@ -728,7 +730,7 @@ class Scheduler:
         return f'------------------------Schedule------------------------\n\nTasksets:\n{tasksets}\nTime: {self.time}\n{readylist}\n{resources}\n{processors}\n\n'
 
 def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod):
-    for i in range(100, 105, 5):
+    for i in range(95, 100, 5):
         utli = float(i / 100)
         tasksets_name = './experiments/inputs/input_task_periodic/' + str(subset) + '/tasksets_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(
             utli) + '_r' + str(res_num) + '_s' + str(c_min) + '_l' + str(c_max)
@@ -769,7 +771,7 @@ def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, 
 def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, SPORADIC):
     # job_sets = []
     task_sets = []
-    for i in range(100, 105, 5):
+    for i in range(95, 100, 5):
         utli = float(i / 100)
         tasksets_name = './experiments/inputs/input_task_periodic/' + str(subset) + '/tasksets_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(utli) + '_r' + str(res_num) + '_s' + str(c_min) + '_l' + str(c_max)  + '.npy'
         task_sets.append(np.load(tasksets_name, allow_pickle=True))

@@ -307,7 +307,7 @@ if __name__ == '__main__':
     print(eval_list_agent)
     print(eval_list_edf)
     print(eval_list_rm)
-
+    
     for k, _ in enumerate(resources_no): 
         plt.title(f'Acceptance Rate of Agent for {2**k} resources')
         plt.plot(range(min_utli, max_utli, 5), eval_list_agent[k])
@@ -363,3 +363,4 @@ if __name__ == '__main__':
         plt.savefig(f'eval/periodic/eval_periodic-mixed-resources.png')
     
     plt.show()
+    

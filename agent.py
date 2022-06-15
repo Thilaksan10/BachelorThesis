@@ -52,7 +52,7 @@ class PolicyNetwork(keras.Model):
     def __init__(self, layer_dims, n_actions, input_shape, n_tasks, m_sets, name='policy', chkpt_dir='tmp/policy'):
         super(PolicyNetwork, self).__init__()
         self.model_name = name
-        self.checkpoint_dir = f'{chkpt_dir}-{n_tasks}x{m_sets}-multiple_resources-sporadic'
+        self.checkpoint_dir = f'{chkpt_dir}-{n_tasks}x{m_sets}-multiple_resources-sporadic-4'
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name)
         self.model_input_shape = (1,) + input_shape
         print(self.model_input_shape)
@@ -94,7 +94,7 @@ class Agent:
         self.policy_network.compile(optimizer=Adam(learning_rate=alpha, clipnorm=1.))
         self.mcts = MCTS()
         if load_memory:
-            with open(f'replay_buffer-{n_tasks}x{m_sets}.pkl', 'rb') as f:
+            with open(f'replay_buffer-{n_tasks}x{m_sets}-periodic.pkl', 'rb') as f:
                 self.memory = pickle.load(f)
                 print(f'Current Memory Counter is {self.memory.mem_cntr}')
         else:

@@ -24,7 +24,7 @@ if __name__ == '__main__':
     subset = 1
 
     # sporadic setting 0 = Periodic, 1 = Sporadic
-    SPORADIC = 1
+    SPORADIC = 0
     mod = 1
 
     generate_tasksets(ntasks=ntasks, msets=msets, processors=processors, res_num=res_num, c_min=c_min, c_max=c_max, subset=subset, mod=mod)
@@ -59,8 +59,8 @@ if __name__ == '__main__':
     print(env.action_shape)
     print(env.observation_shape)
 
-    agent = Agent(n_actions=env.action_shape, input_shape=env.observation_shape, alpha=1e-5, n_tasks=ntasks, m_sets=msets, policy_layer_dims=[512, 1024, 2048, 1024, 512], load_memory=0)
-    # agent.load_models()
+    agent = Agent(n_actions=env.action_shape, input_shape=env.observation_shape, alpha=1e-8, n_tasks=ntasks, m_sets=msets, policy_layer_dims=[512, 1024, 2048, 1024, 512], load_memory=0)
+    agent.load_models()
     # np.random.seed(0)
     observations = []
     actions = []
