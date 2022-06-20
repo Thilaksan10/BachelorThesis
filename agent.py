@@ -52,7 +52,7 @@ class PolicyNetwork(keras.Model):
     def __init__(self, layer_dims, n_actions, input_shape, n_tasks, m_sets, name='policy', chkpt_dir='tmp/policy'):
         super(PolicyNetwork, self).__init__()
         self.model_name = name
-        self.checkpoint_dir = f'{chkpt_dir}-{n_tasks}x{m_sets}-multiple_resources-sporadic-4'
+        self.checkpoint_dir = f'{chkpt_dir}-{n_tasks}x{m_sets}-multiple_resources-periodic'
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name)
         self.model_input_shape = (1,) + input_shape
         print(self.model_input_shape)

@@ -1,6 +1,4 @@
 from copy import deepcopy
-from operator import mod
-from platform import release
 from mcts import TreeNode, MCTS
 from math import gcd
 import numpy as np
@@ -44,7 +42,7 @@ class Job:
         return self.sub_jobs[self.index]
 
     def to_list(self, processor, resource, waiting_priority, time, max_sub_job_count=13):
-        list = [[processor], [resource], [waiting_priority], [self.period], [self.release_time], [self.deadline-time]]
+        list = [[processor], [resource], [waiting_priority], [self.period], [self.release_time-time], [self.deadline-time]]
         # print(list)
         for sub_job in self.sub_jobs:
             list.append([sub_job.execution])
@@ -120,7 +118,6 @@ class Scheduler:
         self.resources = {}
         self.waiting_lists = {}
         self.processors = {}
-        self.missed_deadline = []
 
         if settings is not None:
             self.ntasks = settings['ntasks']
@@ -145,6 +142,7 @@ class Scheduler:
         else:
             self.__dict__ = deepcopy(scheduler.__dict__)
 
+        self.priority_ceilings = self.assign_priority_ceilings()
         self.hyper_period = self.calculate_hyper_period()
 
     # hyperperiod is defined as least common multiple of all periods
@@ -459,10 +457,89 @@ class Scheduler:
             temp_state = Scheduler(scheduler=self)
             states = [(temp_state.execute(), 0)]
         return states
+                
+    def select_pip(self):
+        states = deepcopy(self).generate_states()
+        min_arg = 0
+        min_period = self.hyper_period + 1
+        if self.processors['processor_1'] is not None:
+            exec_task_period = self.processors['processor_1'].period
+            if self.processors['processor_1'].get_current_sub_job().is_critical():
+                sub_job = self.processors['processor_1'].get_current_sub_job()
+                for waiting_job in self.waiting_lists[f'resource_{sub_job.resource_id+1}']:
+                    exec_task_period = min(exec_task_period, waiting_job.period)
+        for index, state in enumerate(states):
+            for taskset in self.tasksets:
+                for task in taskset:
+                    if task.task_id == state[1]:
+                        current_task_period = task.period
+                        if task.released_job.get_current_sub_job().is_critical() and self.resources[f'resource_{task.released_job.get_current_sub_job().resource_id+1}'] == task.released_job:
+                            for waiting_job in self.waiting_lists[f'resource_{task.released_job.get_current_sub_job().resource_id+1}']:
+                                current_task_period = min(current_task_period, waiting_job.period)
+                        if min_period > current_task_period:
+                            min_arg = index
+                            min_period = current_task_period
+                        elif self.processors['processor_1']:
+                            if min_period == exec_task_period and self.processors['processor_1'] == task.released_job:
+                                min_arg = index
+                        break
 
+        return states[min_arg][0]
+
+    def assign_priority_ceilings(self):
+        priority_ceilings = [10 for _ in range(self.res_num)]
+
+        for id, _ in enumerate(priority_ceilings):
+            for taskset in self.tasksets:
+                for task in taskset:
+                    for segment in task.segments:
+                        # print(segment.resource_id)
+                        if segment.resource_id == id:
+                            priority_ceilings[id] = min(priority_ceilings[id], task.period)
+        return priority_ceilings
+                        
+    def select_pcp(self):
+        states = deepcopy(self).generate_states()
+        print(states)
+        min_arg = 0
+        min_period = self.hyper_period + 1
+        priority_ceiling = self.hyper_period
+        for index, resource in enumerate(self.resources):
+            if self.resources[resource] != None:
+                priority_ceiling = min(priority_ceiling, self.priority_ceilings[index])
+        print(priority_ceiling)
+        print(self.priority_ceilings)
+        if self.processors['processor_1'] is not None:
+            exec_task_period = self.processors['processor_1'].period
+            if self.processors['processor_1'].get_current_sub_job().is_critical():
+                sub_job = self.processors['processor_1'].get_current_sub_job()
+                for waiting_job in self.waiting_lists[f'resource_{sub_job.resource_id+1}']:
+                    exec_task_period = min(exec_task_period, waiting_job.period)
+        for index, state in enumerate(states):
+            for taskset in self.tasksets:
+                for task in taskset:
+                    if task.task_id == state[1]:
+                        current_task_period = task.period
+                        
+                        if task.released_job.get_current_sub_job().is_critical() and self.resources[f'resource_{task.released_job.get_current_sub_job().resource_id+1}'] == task.released_job:
+                            for waiting_job in self.waiting_lists[f'resource_{task.released_job.get_current_sub_job().resource_id+1}']:
+                                current_task_period = min(current_task_period, waiting_job.period)
+                        elif task.released_job.get_current_sub_job().is_critical() and self.resources[f'resource_{task.released_job.get_current_sub_job().resource_id+1}'] == None:
+                            if task.period >= priority_ceiling:
+                                current_task_period = min_period
+                        if min_period > current_task_period:
+                            min_arg = index
+                            min_period = current_task_period
+                        elif self.processors['processor_1']:
+                            if min_period == exec_task_period and self.processors['processor_1'] == task.released_job:
+                                min_arg = index
+                        break
+
+        return states[min_arg][0]
+        
      
     def select_edf(self):
-        states = self.generate_states()
+        states = deepcopy(self).generate_states()
         min_arg = 0
         min_deadline = self.hyper_period + 1
         for index, state in enumerate(states):
@@ -484,7 +561,7 @@ class Scheduler:
         # return None
 
     def select_rate_monotonic(self):
-        states = self.generate_states()
+        states = deepcopy(self).generate_states()
         min_arg = 0
         min_period = self.hyper_period + 1
         for index, state in enumerate(states):
@@ -542,7 +619,7 @@ class Scheduler:
         mcts = MCTS()
         best_move = None
         # inputs = [9, 9, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 6, 6, 5, 6, 6, 6, 4, 5, 5, 5, 5, 5, 2, 1, 0, 3, 3, 4, 4, 3, 0, 0, 3, 4, 4, 4, 4, 4, 4, 2, 3, 3, 3, 3, 3, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 0, 2, 0, 5, 6, 5, 5, 4, 4, 3, 3, 2, 2, 1, 1, 0, 6]
-        inputs = []
+        inputs = [1, 7, 7, 7, 7, 7, 7, 7, 7, 7, 4, 6, 6, 6, 5, 4, 6, 6, 6, 2, 5, 5, 5, 5, 5, 0, 3, 0, 0]
         i = 0
         steps = 0
         while self.time < self.hyper_period and self.calculate_scores() > 0:
@@ -592,6 +669,9 @@ class Scheduler:
             # periodic_task = self.select_edf()
             # self.execute_job(periodic_task)
 
+            # select job PIP
+            # self = self.select_pip()
+
             # choose job to execute section
             states = self.generate_states()
             print(states)
@@ -600,30 +680,33 @@ class Scheduler:
                 num = inputs[i]
                 i += 1
                 self = states[int(num)][0]
-            else:
-                conf = 'no'
-                if len(states) == 1:
-                    self = random.choice(states)[0]
-                else:
-                    while conf == 'no':
-                        num = input(f'Enter number from 0 - {len(states)-1}: ')
-                        while num == '' or int(num) >= len(states):
-                            print('inputted number is to high or wrong')
-                            num = input(f'Enter number from 0 - {len(states)-1}: ')
+            # else:
+            #     conf = 'no'
+            #     if len(states) == 1:
+            #         self = random.choice(states)[0]
+            #     else:
+            #         while conf == 'no':
+            #             num = input(f'Enter number from 0 - {len(states)-1}: ')
+            #             while num == '' or int(num) >= len(states):
+            #                 print('inputted number is to high or wrong')
+            #                 num = input(f'Enter number from 0 - {len(states)-1}: ')
 
-                        print('_____________________________________________________________________________')
-                        print()
-                        print(states[int(num)][0].to_string())
-                        conf = input('Do you want to execute this state? ')
-                    self = states[int(num)][0]
-                    inputs.append(int(num))
-                    i += 1
-                    print(inputs)
+            #             print('_____________________________________________________________________________')
+            #             print()
+            #             print(states[int(num)][0].to_string())
+            #             conf = input('Do you want to execute this state? ')
+            #         self = states[int(num)][0]
+            #         inputs.append(int(num))
+            #         i += 1
+            #         print(inputs)
             
             # self.execute(self.ready_list[int(num)])
             # print(f'BEST MOVE SCORE: {best_move.score}')
             # print(f'SCORE: {self.calculate_score()}')
             # input()
+            else:
+                # select job PCP
+                self = self.select_pcp()
 
 
             # print(16*'-' + 'End of Timeslot' + 16*'-')
@@ -824,20 +907,20 @@ def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, SPOR
 
 if __name__ == '__main__':
     # tasks per taskset
-    ntasks = 5
+    ntasks = 8
     # number of tasksets
     msets = 1
     # number of processors
     processors = 1
     # num of resources
-    res_num = 1
+    res_num = 8
 
     c_min = 0.05
     c_max = 0.1
     subset = 1
 
     # sporadic setting 0 = Periodic, 1 = Sporadic
-    SPORADIC = 1
+    SPORADIC = 0
     mod = 1
 
     # Least common multiple of all Periods in tasksets
@@ -865,7 +948,7 @@ if __name__ == '__main__':
 
     #     print(f'episode {i}, final score {final_state.calculate_scores()}, steps {steps}')
     # print(f'Won Games: {wins}')
-    generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod)
+    # generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod)
     tasksets = load_tasksets(ntasks=ntasks, msets=msets, processors=processors, res_num=res_num, c_min=c_min, c_max=c_max, subset=subset, SPORADIC=SPORADIC)
     settings = {
         'ntasks': ntasks, 
@@ -887,6 +970,8 @@ if __name__ == '__main__':
 
     # print('\n-------------------------------------\n')
     print(scheduler.to_string())
+    print(scheduler.priority_ceilings)
     # print(scheduler.to_array())
+
     scheduler.schedule_loop()
     # print(scheduler.select_edf().to_string())

@@ -5,6 +5,7 @@ from agent import Agent
 from ml_scheduler import Task, Scheduler
 from scheduler_env import SchedulerEnv
 import matplotlib.pyplot as plt
+from copy import deepcopy
 
 def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli, mod, iteration):
     tasksets_name = './experiments/evaluation/' + str(subset) + '/tasksets_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(
@@ -30,7 +31,7 @@ def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli
     return tasksets
 
 def select_edf(scheduler):
-        states = scheduler.generate_states()
+        states = deepcopy(scheduler).generate_states()
         deadlines = []
         min_arg = 0
         min_deadline = scheduler.hyper_period + 1
@@ -46,7 +47,7 @@ def select_edf(scheduler):
         return states[min_arg][1]
 
 def select_rate_monotonic(scheduler):
-        states = scheduler.generate_states()
+        states = deepcopy(scheduler).generate_states()
         min_arg = 0
         min_period = scheduler.hyper_period + 1
         for index, state in enumerate(states):
@@ -56,6 +57,73 @@ def select_rate_monotonic(scheduler):
                         if min_period > task.period:
                             min_arg = index
                             min_period = task.period
+                        break
+
+        return states[min_arg][1]
+
+def select_pip(scheduler):
+        states = deepcopy(scheduler).generate_states()
+        min_arg = 0
+        min_period = scheduler.hyper_period + 1
+        if scheduler.processors['processor_1'] is not None:
+            exec_task_period = scheduler.processors['processor_1'].period
+            if scheduler.processors['processor_1'].get_current_sub_job().is_critical():
+                sub_job = scheduler.processors['processor_1'].get_current_sub_job()
+                for waiting_job in scheduler.waiting_lists[f'resource_{sub_job.resource_id+1}']:
+                    exec_task_period = min(exec_task_period, waiting_job.period)
+        for index, state in enumerate(states):
+            for taskset in scheduler.tasksets:
+                for task in taskset:
+                    if task.task_id == state[1]:
+                        current_task_period = task.period
+                        if task.released_job.get_current_sub_job().is_critical() and scheduler.resources[f'resource_{task.released_job.get_current_sub_job().resource_id+1}'] == task.released_job:
+                            for waiting_job in scheduler.waiting_lists[f'resource_{task.released_job.get_current_sub_job().resource_id+1}']:
+                                current_task_period = min(current_task_period, waiting_job.period)
+                        if min_period > current_task_period:
+                            min_arg = index
+                            min_period = current_task_period
+                        elif scheduler.processors['processor_1']:
+                            if min_period == exec_task_period and scheduler.processors['processor_1'] == task.released_job:
+                                min_arg = index
+                        break
+
+        return states[min_arg][1]
+
+def select_pcp(scheduler):
+        states = deepcopy(scheduler).generate_states()
+        # print(states)
+        min_arg = 0
+        min_period = scheduler.hyper_period + 1
+        priority_ceiling = scheduler.hyper_period
+        for index, resource in enumerate(scheduler.resources):
+            if scheduler.resources[resource] != None:
+                priority_ceiling = min(priority_ceiling, scheduler.priority_ceilings[index])
+        # print(priority_ceiling)
+        # print(scheduler.priority_ceilings)
+        if scheduler.processors['processor_1'] is not None:
+            exec_task_period = scheduler.processors['processor_1'].period
+            if scheduler.processors['processor_1'].get_current_sub_job().is_critical():
+                sub_job = scheduler.processors['processor_1'].get_current_sub_job()
+                for waiting_job in scheduler.waiting_lists[f'resource_{sub_job.resource_id+1}']:
+                    exec_task_period = min(exec_task_period, waiting_job.period)
+        for index, state in enumerate(states):
+            for taskset in scheduler.tasksets:
+                for task in taskset:
+                    if task.task_id == state[1]:
+                        current_task_period = task.period
+                        
+                        if task.released_job.get_current_sub_job().is_critical() and scheduler.resources[f'resource_{task.released_job.get_current_sub_job().resource_id+1}'] == task.released_job:
+                            for waiting_job in scheduler.waiting_lists[f'resource_{task.released_job.get_current_sub_job().resource_id+1}']:
+                                current_task_period = min(current_task_period, waiting_job.period)
+                        elif task.released_job.get_current_sub_job().is_critical() and scheduler.resources[f'resource_{task.released_job.get_current_sub_job().resource_id+1}'] == None:
+                            if task.period >= priority_ceiling:
+                                current_task_period = min_period
+                        if min_period > current_task_period:
+                            min_arg = index
+                            min_period = current_task_period
+                        elif scheduler.processors['processor_1']:
+                            if min_period == exec_task_period and scheduler.processors['processor_1'] == task.released_job:
+                                min_arg = index
                         break
 
         return states[min_arg][1]
@@ -82,7 +150,7 @@ if __name__ == '__main__':
     min_utli = 5
     max_utli = 105
 
-    generate = 0
+    generate = 1
 
     if generate:
         for res_num in resources_no:
@@ -146,60 +214,60 @@ if __name__ == '__main__':
 
     eval_list_agent = []
 
-    for res_num in resources_no:
-        eval_utli = []
-        for i in range(min_utli, max_utli, 5):
-            utli = float(i/100)
-            won = 0
-            for iteration in range(iterations):
-                tasksets = load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli, SPORADIC, iteration+1)
-                settings = {
-                    'ntasks': ntasks, 
-                    'msets': msets, 
-                    'processors': processors,
-                    'res_num': res_num,
-                    'c_min': c_min,
-                    'c_max': c_max,
-                    'subset': subset,
-                    'SPORADIC': SPORADIC,
-                    'mod': mod,
-                }
+    # for res_num in resources_no:
+    #     eval_utli = []
+    #     for i in range(min_utli, max_utli, 5):
+    #         utli = float(i/100)
+    #         won = 0
+    #         for iteration in range(iterations):
+    #             tasksets = load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, utli, SPORADIC, iteration+1)
+    #             settings = {
+    #                 'ntasks': ntasks, 
+    #                 'msets': msets, 
+    #                 'processors': processors,
+    #                 'res_num': res_num,
+    #                 'c_min': c_min,
+    #                 'c_max': c_max,
+    #                 'subset': subset,
+    #                 'SPORADIC': SPORADIC,
+    #                 'mod': mod,
+    #             }
 
-                scheduler = Scheduler(tasksets, settings)
-                env = SchedulerEnv(scheduler)
-                # env.render()
-                min_time = scheduling_time(scheduler)
-                done = False
-                score = 0
-                observation = env.state
-                while not done:
-                    action = agent.choose_action_eval(observation.to_array())
-                    # action = select_edf(observation)
-                    # action = select_rate_monotonic(observation)
-                    # print(action)
-                    state_, reward, done, info = env.step(action)
-                    score += reward
-                    # env.render()
-                    # if observation.to_string() == state_.to_string() and not info['invalid']:
-                    #     input()
-                    observation = state_
-                if reward == 1:
-                    won += 1
-                if info['invalid']:
-                    invalid = 1
-                else:
-                    invalid = 0
-                # if min_time > scheduler.hyper_period and reward == 1:
-                #     print(observation.to_string())
-                #     for job in observation.ready_list:
-                #         print(f'Task ID: {job.task_id}')
-                #     print(observation.calculate_scores())
+    #             scheduler = Scheduler(tasksets, settings)
+    #             env = SchedulerEnv(scheduler)
+    #             # env.render()
+    #             min_time = scheduling_time(scheduler)
+    #             done = False
+    #             score = 0
+    #             observation = env.state
+    #             while not done:
+    #                 action = agent.choose_action_eval(observation.to_array())
+    #                 # action = select_edf(observation)
+    #                 # action = select_rate_monotonic(observation)
+    #                 # print(action)
+    #                 state_, reward, done, info = env.step(action)
+    #                 score += reward
+    #                 # env.render()
+    #                 # if observation.to_string() == state_.to_string() and not info['invalid']:
+    #                 #     input()
+    #                 observation = state_
+    #             if reward == 1:
+    #                 won += 1
+    #             if info['invalid']:
+    #                 invalid = 1
+    #             else:
+    #                 invalid = 0
+    #             # if min_time > scheduler.hyper_period and reward == 1:
+    #             #     print(observation.to_string())
+    #             #     for job in observation.ready_list:
+    #             #         print(f'Task ID: {job.task_id}')
+    #             #     print(observation.calculate_scores())
 
-                print(f'res_num {res_num}, utilization {utli}, taskset {iteration}, invalid {invalid}, final_score {reward}, cummulative score {score}, scheduling_time {min_time}')
-            eval_utli.append(won/iterations)
-        eval_list_agent.append(eval_utli)
+    #             print(f'res_num {res_num}, utilization {utli}, taskset {iteration}, invalid {invalid}, final_score {reward}, cummulative score {score}, scheduling_time {min_time}')
+    #         eval_utli.append(won/iterations)
+    #     eval_list_agent.append(eval_utli)
 
-    eval_list_edf = []
+    eval_list_pcp = []
 
     for res_num in resources_no:
         eval_utli = []
@@ -230,7 +298,7 @@ if __name__ == '__main__':
                 observation = env.state
                 while not done:
                     # action = agent.choose_action_eval(observation.to_array())
-                    action = select_edf(observation)
+                    action = select_pcp(observation)
                     # action = select_rate_monotonic(observation)
                     # print(action)
                     state_, reward, done, info = env.step(action-1)
@@ -250,9 +318,9 @@ if __name__ == '__main__':
 
                 print(f'res_num {res_num}, utilization {utli}, taskset {iteration}, final_score {reward}, cummulative score {score}, scheduling_time {min_time}')
             eval_utli.append(won/iterations)
-        eval_list_edf.append(eval_utli)
+        eval_list_pcp.append(eval_utli)
 
-    eval_list_rm = []
+    eval_list_pip = []
 
     for res_num in resources_no:
         eval_utli = []
@@ -283,7 +351,7 @@ if __name__ == '__main__':
                 while not done:
                     # action = agent.choose_action_eval(observation.to_array())
                     # action = select_edf(observation)
-                    action = select_rate_monotonic(observation)
+                    action = select_pip(observation)
                     # print(action)
                     state_, reward, done, info = env.step(action-1)
                     score += reward
@@ -302,17 +370,18 @@ if __name__ == '__main__':
 
                 print(f'res_num {res_num}, utilization {utli}, taskset {iteration}, final_score {reward}, cummulative score {score}, scheduling_time {min_time}')
             eval_utli.append(won/iterations)
-        eval_list_rm.append(eval_utli)
+        eval_list_pip.append(eval_utli)
    
     print(eval_list_agent)
-    print(eval_list_edf)
-    print(eval_list_rm)
+    print(eval_list_pcp)
+    print(eval_list_pip)
     
     for k, _ in enumerate(resources_no): 
+        plt.figure(k)
         plt.title(f'Acceptance Rate of Agent for {2**k} resources')
-        plt.plot(range(min_utli, max_utli, 5), eval_list_agent[k])
-        plt.plot(range(min_utli, max_utli, 5), eval_list_edf[k])
-        plt.plot(range(min_utli, max_utli, 5), eval_list_rm[k])
+        # plt.plot(range(min_utli, max_utli, 5), eval_list_agent[k])
+        plt.plot(range(min_utli, max_utli, 5), eval_list_pcp[k])
+        plt.plot(range(min_utli, max_utli, 5), eval_list_pip[k])
         plt.xlabel('Utilization in %')
         plt.ylabel('Acceptance Rate')
         plt.legend(['Agent', 'EDF', 'RM'])
@@ -332,26 +401,27 @@ if __name__ == '__main__':
         sum = sum / len(eval_list_agent)
         eval_mix_agent.append(sum)
 
-    eval_mix_edf = []
-    for m, _ in enumerate(eval_list_edf[0]):
+    eval_mix_pcp = []
+    for m, _ in enumerate(eval_list_pcp[0]):
         sum = 0
-        for eval_utli in eval_list_edf:
+        for eval_utli in eval_list_pcp:
             sum += eval_utli[m]
-        sum = sum / len(eval_list_edf)
-        eval_mix_edf.append(sum)
+        sum = sum / len(eval_list_pcp)
+        eval_mix_pcp.append(sum)
 
-    eval_mix_rm = []
-    for m, _ in enumerate(eval_list_rm[0]):
+    eval_mix_pip = []
+    for m, _ in enumerate(eval_list_pip[0]):
         sum = 0
-        for eval_utli in eval_list_rm:
+        for eval_utli in eval_list_pip:
             sum += eval_utli[m]
-        sum = sum / len(eval_list_rm)
-        eval_mix_rm.append(sum)
+        sum = sum / len(eval_list_pip)
+        eval_mix_pip.append(sum)
 
+    plt.figure(10)
     plt.title(f'Acceptance Rate of Agent for mix resources')
-    plt.plot(range(min_utli, max_utli, 5), eval_mix_agent)
-    plt.plot(range(min_utli, max_utli, 5), eval_mix_edf)
-    plt.plot(range(min_utli, max_utli, 5), eval_mix_rm)
+    # plt.plot(range(min_utli, max_utli, 5), eval_mix_agent)
+    plt.plot(range(min_utli, max_utli, 5), eval_mix_pcp)
+    plt.plot(range(min_utli, max_utli, 5), eval_mix_pip)
     plt.xlabel('Utilization in %')
     plt.ylabel('Acceptance Rate')
     plt.legend(['Agent', 'EDF', 'RM'])

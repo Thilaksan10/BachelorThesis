@@ -126,13 +126,14 @@ class MCTS:
         coefficient = 1
         
         # simulate until all tasks are scheduled or a certain iteartion count is reached
-        while not scheduler.all_tasks_scheduled() and iterations <= 25 and not score <= 0:
+        while not scheduler.all_tasks_scheduled() and not score <= 0:
             # queue all arrived tasks to 'ready list
             
             states = scheduler.generate_states()
             
             scheduler = random.choice(states)[0]
-            
+            # scheduler = scheduler.select_edf()
+
             iterations += 1
             score += (scheduler.calculate_scores()/coefficient)
             # print(f'Score: {score}')

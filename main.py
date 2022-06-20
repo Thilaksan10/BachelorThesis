@@ -59,8 +59,8 @@ if __name__ == '__main__':
     print(env.action_shape)
     print(env.observation_shape)
 
-    agent = Agent(n_actions=env.action_shape, input_shape=env.observation_shape, alpha=1e-8, n_tasks=ntasks, m_sets=msets, policy_layer_dims=[512, 1024, 2048, 1024, 512], load_memory=0)
-    agent.load_models()
+    agent = Agent(n_actions=env.action_shape, input_shape=env.observation_shape, alpha=1e-5, n_tasks=ntasks, m_sets=msets, policy_layer_dims=[512, 1024, 2048, 1024, 512], load_memory=0)
+    # agent.load_models()
     # np.random.seed(0)
     observations = []
     actions = []
