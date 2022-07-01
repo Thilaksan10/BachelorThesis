@@ -1,0 +1,6 @@
+drs==2
+numpy==1.23
+gym==0.24
+tensorflow==2.9
+matplotlib==3.5
+tensorflow-probability==0.17

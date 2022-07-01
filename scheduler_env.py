@@ -1,13 +1,11 @@
 from copy import deepcopy
 from gym import Env
-from gym.spaces import Discrete, Box
-import numpy as np
-import random
 import tensorflow as tf
 from ml_scheduler import Scheduler, generate_tasksets, load_tasksets 
 
 class SchedulerEnv(Env):
     def __init__(self, scheduler):
+        # copy the settings of scheduler
         self.hyper_period = scheduler.hyper_period
         self.ntasks = scheduler.ntasks
         self.msets = scheduler.msets
@@ -18,37 +16,34 @@ class SchedulerEnv(Env):
         self.subset = scheduler.subset
         self.SPORADIC = scheduler.SPORADIC
         self.mod = scheduler.mod
+        # set counter for resource list
         self.res_cntr = -1
-
+        
+        # get shape of our action space
         self.action_shape = self.ntasks * self.msets
+        # get shape of our observation space
         self.observation_shape = tf.convert_to_tensor(scheduler.to_array()).shape
+        # set scheduler as state of environemnt
         self.state = scheduler
+        # jump to next check where at least 1 job is ready and can get executed
         while deepcopy(self.state).generate_states()[0][1] == 0:
             self.state = deepcopy(self.state).generate_states()[0][0]
             self.time = self.state.time
 
+    # do step in environment
     def step(self, action):
         # check if chosen action is a possible action and state to new state
         n_states = self.state.generate_states()
-        # print(n_states)
-        # print(action)
+        
         possible_action = False
-        # print(action)
-        # print(action[0])
+        
         for n_state in n_states:
-            if n_state[1]-1 == action:
+            if (n_state[1]-1) % self.ntasks == action % self.ntasks:
                 possible_action = True
                 self.state = n_state[0] 
-                self.time = self.state.time 
+                self.time = self.state.time
             
-        # self.state = action[0]
-        # self.time = self.state.time
-        # possible_action = True
-               
-        # while len(deepcopy(self.state).generate_states()) == 1:
-        #     self.state = deepcopy(self.state).generate_states()[0][0]
-        #     self.time = self.state.time
-        # print(deepcopy(self.state).generate_states()[0][1])
+        # jump to next check where at least 1 job is ready and can get executed
         while deepcopy(self.state).generate_states()[0][1] == 0:
             self.state = deepcopy(self.state).generate_states()[0][0]
             self.time = self.state.time
@@ -58,18 +53,12 @@ class SchedulerEnv(Env):
             reward = self.state.calculate_scores()
             invalid = 0
         else:
-            # prob = []
-            # for n_state in n_states:
-            #     prob.append(action[n_state[1]])
-            # high = np.argmax(prob)
-            # self.state = random.choice(n_states)[0]
-            # self.time = self.state.time
             reward = -1
             invalid = 1
             
 
-        # check if all tasks are schedules or hyperperiod reached
-        if self.state.all_tasks_scheduled() or self.state.time >= 10 or reward <= 0:
+        # check if hyperperiod is reached or deadline was missed
+        if self.state.hyper_period_reached() or reward <= 0:
             done = True
         else:
             done = False
@@ -81,18 +70,16 @@ class SchedulerEnv(Env):
 
     def render(self):
         print(self.state.to_string())
-        # print(deepcopy(self.state).generate_states())
-
+        
+    # reset environment by generating and loading new tasksets with similar settings
     def reset(self):
-        # generate new taskset with same setting
-        # if won:
+        # increment pointer on for resource list
         self.res_cntr += 1
         res = [1,2,4,8]
         self.res_num = res[self.res_cntr % 4]
-        # self.res_num = 1
+        
+        # generate and load tasksets
         generate_tasksets(self.ntasks, self.msets, self.processor_num, self.res_num, self.c_min, self.c_max, self.subset, self.mod)
-            # print('generate new taskets ...')
-        # load newly generated taskset
         tasksets = load_tasksets(self.ntasks, self.msets, self.processor_num, self.res_num, self.c_min, self.c_max, self.subset, self.SPORADIC)
         
         settings = {
@@ -106,8 +93,10 @@ class SchedulerEnv(Env):
             'SPORADIC': self.SPORADIC,
             'mod': self.mod,
         }
-        self.state = Scheduler(tasksets, settings)
 
+        # generate scheduler object
+        self.state = Scheduler(tasksets, settings)
+        # jump to next check where at least 1 job is ready and can get executed
         while deepcopy(self.state).generate_states()[0][1] == 0:
             self.state = deepcopy(self.state).generate_states()[0][0]
             self.time = self.state.time

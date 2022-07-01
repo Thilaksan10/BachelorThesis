@@ -1,15 +1,3 @@
 virtualenvironment
-states.csv
-states_test.csv
-actions.csv
-actions_test.csv
-Supervised
-Supervised-v2
-Supervised-v3
-Supervised-v4
-Supervised-v5
-Supervised-v6
-experiments/inputs
 tmp
-supervised_learning.py
 *.pkl

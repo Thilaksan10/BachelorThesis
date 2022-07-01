@@ -10,8 +10,8 @@ class TreeNode:
         # init associated board state
         self.scheduler = deepcopy(scheduler)
 
-        # init is node terminal flag
-        if self.scheduler.all_tasks_scheduled() or self.scheduler.time >= 10 or self.scheduler.calculate_scores() <= 0:
+        # init nodes terminal flag
+        if self.scheduler.hyper_period_reached() or self.scheduler.calculate_scores() <= 0:
             # we have terminal node
             self.is_terminal = True
         else:
@@ -51,30 +51,25 @@ class MCTS:
         else:
             self.root = TreeNode(initial_state, 0, None)
 
-        # walk through 1000 iterations
-        for iteration in range(10):
-            # print(f'ITERATION : {iteration}')
-        
-            # select a node (selction phase)
+        # walk through 10 iterations
+        for _ in range(10):
+            # select a node (selection phase)
             node =  self.select(self.root)
-            # print(node.scheduler.to_string())
+
             # score current node (simulation phase)
             score = 0
             simulations = 1
             for _ in range(simulations):
                 score += self.rollout(node)
-            
             score /= simulations
-            # print(f'Score: {score}')
+            
             # backpropagate results
             self.backpropagate(node, score)
         
-        # pick up the best move in the current position
-        try:
+        if not self.root.is_terminal:
+            # pick up the best move in the current position
             return self.get_best_move(self.root, 0)
-        
-        except:
-            pass
+
     
     # select most promising node
     def select(self, node):
@@ -125,22 +120,17 @@ class MCTS:
         iterations = 0
         coefficient = 1
         
-        # simulate until all tasks are scheduled or a certain iteartion count is reached
-        while not scheduler.all_tasks_scheduled() and not score <= 0:
-            # queue all arrived tasks to 'ready list
-            
+        # simulate until hyperperiod is reached or deadline was missed
+        while not scheduler.hyper_period_reached() and not score <= 0:
+            # generate possible next states and simulate by picking random state
             states = scheduler.generate_states()
-            
             scheduler = random.choice(states)[0]
-            # scheduler = scheduler.select_edf()
 
             iterations += 1
+            # add decayed score of current state to simulation score
             score += (scheduler.calculate_scores()/coefficient)
-            # print(f'Score: {score}')
-            
             coefficient += 0.1
             
-        # print(f'Cumulative Score: {score}')
         return score
 
 
@@ -154,7 +144,6 @@ class MCTS:
             # update node's score
             node.score += score 
            
-            # print(f'Node: {node.score}')
             # set node to parent
             node = node.parent
 
@@ -164,6 +153,7 @@ class MCTS:
         # define best score & best moves
         best_score = float('-inf')
         best_moves = []
+        print(len(node.children))
 
         # loop over child nodes
         for child_node in node.children.values():
@@ -179,4 +169,5 @@ class MCTS:
                 best_moves.append(child_node)
 
         # return one of the best moves randomly
+        print(best_moves)
         return random.choice(best_moves)

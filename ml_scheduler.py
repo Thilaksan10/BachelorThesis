@@ -4,7 +4,6 @@ from math import gcd
 import numpy as np
 import random
 import taskset_generator.generator as gen
-from tqdm import tqdm
 
 class SubJob:
     def __init__(self, utilization, resource_id) -> None:
@@ -41,9 +40,9 @@ class Job:
     def get_current_sub_job(self):
         return self.sub_jobs[self.index]
 
+    # returns list with important details like period and remaining time till deadline of Job
     def to_list(self, processor, resource, waiting_priority, time, max_sub_job_count=13):
         list = [[processor], [resource], [waiting_priority], [self.period], [self.release_time-time], [self.deadline-time]]
-        # print(list)
         for sub_job in self.sub_jobs:
             list.append([sub_job.execution])
             list.append([sub_job.resource_id])
@@ -54,7 +53,6 @@ class Job:
             else:
                 list.insert(6,[0])
             list.insert(6, [0])
-        # print(list)
         return list
 
     def to_string(self):
@@ -71,6 +69,7 @@ class Task:
         self.SPORADIC = SPORADIC
         for segment in segments:
             self.segments.append(SubJob(utilization=segment[0], resource_id=segment[1]))
+        # sporadic tasks add random number to release time using uniform distribution
         if SPORADIC:
             release_time = 0 + random.uniform(0, self.period)
             self.released_job = Job(self.segments, self.period, release_time, release_time + self.period, self.task_id)
@@ -157,8 +156,7 @@ class Scheduler:
         lcm = 1
         for period in periods:
             lcm = lcm * period // gcd(lcm, period)
-        if self.SPORADIC:
-            lcm *= 2
+
         return lcm
 
     # check if a new job is released
@@ -168,7 +166,6 @@ class Scheduler:
     # recently released job of the given task acquires resource
     def lock_resource(self, job):
         sub_job = job.get_current_sub_job()
-        # print(job.resource_id + 1)
         self.resources[f'resource_{sub_job.resource_id + 1}'] = job
 
     # recently released job of the given task releases resource
@@ -178,9 +175,6 @@ class Scheduler:
 
     # queues task to the ready list
     def queue(self, task):
-        # print(f'Task: {periodic_task.to_string()}')
-        # print(f'Ready: {periodic_task.is_ready(self.time)}')
-        # print('____________________________________')
         # append task to ready list
         if task.released_job not in self.processors.values() and task.released_job not in self.ready_list and not task.released_job.is_finished():
             self.ready_list.append(task.released_job)
@@ -190,25 +184,22 @@ class Scheduler:
     # returns the arrival time of the next task 
     def get_next_task_arrival(self):
         next_arrival = float('inf')
-        # iterate through 'not ready' list to find the earliest released task
+        # iterate through list of tasksets to find the earliest released task
         for taskset in self.tasksets:
             for task in taskset:
-                # print(f'Next Arrival: {next_arrival}')
-                # print(task.to_string())
-                # print(len(task.get_current_job().sub_jobs))
-                # print(task.get_current_job().index)
-                # print(task.get_current_job().is_finished())
+                # released job of task finished execution 
                 if task.get_current_job().is_finished():
+                    # calculate next job release
                     next_release = task.get_current_job().release_time + task.period
-                    # print(f'Next Release: {next_release}')
                     if next_release < self.time:
-                        # print(f'Next Release2: {next_release}')
                         next_release = float('inf')
                     next_arrival = min(next_arrival, next_release)
-                # else:
-                #     next_arrival = min(task.get_current_job().release_time, next_arrival)
+                # task generated a job to release but did not release job
                 elif task.get_current_job().release_time > self.time:
                     next_arrival = min(task.get_current_job().release_time, next_arrival)
+                # released job of task is not finished
+                elif not task.get_current_job().is_finished():
+                    next_arrival = min(task.get_current_job().deadline, next_arrival)
         return next_arrival
 
     def insert_in_waiting_list_edf(self, job):
@@ -458,34 +449,54 @@ class Scheduler:
             states = [(temp_state.execute(), 0)]
         return states
                 
+    # use priority inheritance protocol to select next job to execute 
+    # priority = period -> the lower the period the lower the priority 
+    # job with lowest priority gets executed next
     def select_pip(self):
+        # generate tuple of (possible next state, task id)
         states = deepcopy(self).generate_states()
+        # set task with the lowest priority to be the first task in states list 
         min_arg = 0
+        # set minimum period bigger than hyper period
         min_period = self.hyper_period + 1
+        # job is currently executing
         if self.processors['processor_1'] is not None:
+            # set period of executing job as priority
             exec_task_period = self.processors['processor_1'].period
+            # executing sub job of job is critical
             if self.processors['processor_1'].get_current_sub_job().is_critical():
                 sub_job = self.processors['processor_1'].get_current_sub_job()
+                # if job in waitling list with lower period set priority of executing job to priority of waiting job with lowest priority
                 for waiting_job in self.waiting_lists[f'resource_{sub_job.resource_id+1}']:
                     exec_task_period = min(exec_task_period, waiting_job.period)
+        # search for every task in state list
         for index, state in enumerate(states):
             for taskset in self.tasksets:
                 for task in taskset:
                     if task.task_id == state[1]:
+                        # set the priority of task in consideration
                         current_task_period = task.period
+                        # next execution of task is critical and released job of task acquired resource
                         if task.released_job.get_current_sub_job().is_critical() and self.resources[f'resource_{task.released_job.get_current_sub_job().resource_id+1}'] == task.released_job:
+                            # if job in waitling list with lower period set priority of executing job to priority of waiting job with lowest priority
                             for waiting_job in self.waiting_lists[f'resource_{task.released_job.get_current_sub_job().resource_id+1}']:
                                 current_task_period = min(current_task_period, waiting_job.period)
+                        # task in consideration has currently lowest period
                         if min_period > current_task_period:
+                            # set index for state list and set the current lowest priority  
                             min_arg = index
                             min_period = current_task_period
+                        # task in consideration is executing
                         elif self.processors['processor_1']:
+                            # task with lowest priortiy is executing
                             if min_period == exec_task_period and self.processors['processor_1'] == task.released_job:
+                                # set index for state list
                                 min_arg = index
                         break
-
+        # return the state, which is the result of executing the task with lowest period
         return states[min_arg][0]
 
+    # assign priority ceilings for all resources
     def assign_priority_ceilings(self):
         priority_ceilings = [10 for _ in range(self.res_num)]
 
@@ -493,48 +504,65 @@ class Scheduler:
             for taskset in self.tasksets:
                 for task in taskset:
                     for segment in task.segments:
-                        # print(segment.resource_id)
                         if segment.resource_id == id:
                             priority_ceilings[id] = min(priority_ceilings[id], task.period)
         return priority_ceilings
-                        
+
+    # use priority ceiling protocol to select next job to execute 
+    # priority = period -> the lower the period the lower the priority 
+    # job with lowest priority gets executed next     
     def select_pcp(self):
+        # generate tuple of (possible next state, task id)
         states = deepcopy(self).generate_states()
-        print(states)
+       # set task with the lowest priority to be the first task in states list 
         min_arg = 0
+        # set minimum period bigger than hyper period
         min_period = self.hyper_period + 1
+        # set the global priority ceiling to the hyper period
         priority_ceiling = self.hyper_period
+        # set the global prioriy ceiling by iteratiing through resources list and find acquired resources
         for index, resource in enumerate(self.resources):
             if self.resources[resource] != None:
                 priority_ceiling = min(priority_ceiling, self.priority_ceilings[index])
-        print(priority_ceiling)
-        print(self.priority_ceilings)
+        # job is currently executing
         if self.processors['processor_1'] is not None:
+            # set period of executing job as priority
             exec_task_period = self.processors['processor_1'].period
+            # executing sub job of job is critical
             if self.processors['processor_1'].get_current_sub_job().is_critical():
                 sub_job = self.processors['processor_1'].get_current_sub_job()
+                # do priority inheritance
                 for waiting_job in self.waiting_lists[f'resource_{sub_job.resource_id+1}']:
                     exec_task_period = min(exec_task_period, waiting_job.period)
+        # search for every task in state list
         for index, state in enumerate(states):
             for taskset in self.tasksets:
                 for task in taskset:
                     if task.task_id == state[1]:
                         current_task_period = task.period
-                        
+                        # next execution of task is critical and released job of task acquired resource
                         if task.released_job.get_current_sub_job().is_critical() and self.resources[f'resource_{task.released_job.get_current_sub_job().resource_id+1}'] == task.released_job:
+                            # do priority inheritance
                             for waiting_job in self.waiting_lists[f'resource_{task.released_job.get_current_sub_job().resource_id+1}']:
                                 current_task_period = min(current_task_period, waiting_job.period)
+                        # next execution of task is critical and released job of task did not acquire resource
                         elif task.released_job.get_current_sub_job().is_critical() and self.resources[f'resource_{task.released_job.get_current_sub_job().resource_id+1}'] == None:
+                            # check if tasks period is lower than global periority ceiling
                             if task.period >= priority_ceiling:
                                 current_task_period = min_period
+                        # tasnk in consideration has currently lowest period
                         if min_period > current_task_period:
+                            # set index for state list and set the current lowest priority 
                             min_arg = index
                             min_period = current_task_period
+                        # task in consideration is executing
                         elif self.processors['processor_1']:
+                            # task with lowest priortiy is executing
                             if min_period == exec_task_period and self.processors['processor_1'] == task.released_job:
+                                # set index of state list
                                 min_arg = index
                         break
-
+        # return the state, which is the result of executing the task with lowest period
         return states[min_arg][0]
         
      
@@ -552,13 +580,6 @@ class Scheduler:
                         break
 
         return states[min_arg][0]
-        # if self.ready_list:
-        #     earliest_deadline = self.ready_list[0]
-        #     for job in self.ready_list:
-        #         if earliest_deadline.deadline > job.deadline:
-        #             earliest_deadline = job
-            
-        # return None
 
     def select_rate_monotonic(self):
         states = deepcopy(self).generate_states()
@@ -576,8 +597,8 @@ class Scheduler:
         return states[min_arg][0]
     
 
-    # check if all tasks are scheduled
-    def all_tasks_scheduled(self):
+    # check if hyperperiod reached
+    def hyper_period_reached(self):
         return self.time >= self.hyper_period
 
     # check if there is an deadlock
@@ -604,125 +625,14 @@ class Scheduler:
             if self.processors['processor_1'].deadline <= self.time:
                 deadline_miss = True
         
-            
+        
         if not deadline_miss:
             score = 1
         else:
             score = -2
         return score
 
-
-    def schedule_loop(self):
-        # print(self.to_string())
-
-        # create MCTS instance
-        mcts = MCTS()
-        best_move = None
-        # inputs = [9, 9, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 6, 6, 5, 6, 6, 6, 4, 5, 5, 5, 5, 5, 2, 1, 0, 3, 3, 4, 4, 3, 0, 0, 3, 4, 4, 4, 4, 4, 4, 2, 3, 3, 3, 3, 3, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 0, 2, 0, 5, 6, 5, 5, 4, 4, 3, 3, 2, 2, 1, 1, 0, 6]
-        inputs = [1, 7, 7, 7, 7, 7, 7, 7, 7, 7, 4, 6, 6, 6, 5, 4, 6, 6, 6, 2, 5, 5, 5, 5, 5, 0, 3, 0, 0]
-        i = 0
-        steps = 0
-        while self.time < self.hyper_period and self.calculate_scores() > 0:
-            # mcts selection of next job to execute
-            # print(self.time < self.hyper_period)
-            # print(best_move)
-            # states = deepcopy(self).generate_states()
-            # # print(f'# States : {len(states)}')
-            # if len(states) == 1:
-            #     self = states[0][0]
-            #     if best_move:
-            #         if self.to_string() not in best_move.children:
-            #             # print('Node does not exist')
-            #             new_node = TreeNode(self, states[0][1], best_move)
-            #             best_move.children[self.to_string()] = new_node 
-            #         else:
-            #             # print('node already exists')
-            #             new_node = best_move.children[self.to_string()]
-            #     else:
-            #         # print('first Iteration')
-            #         new_node = TreeNode(self, states[0][1], best_move)
-            #     best_move = new_node
-            # else:
-            #     # case not first iteration of schedule loop
-            #     if best_move:
-            #         # search for best move on already existing mct
-            #         best_move = mcts.search(self, current_node=best_move)
-                    
-            #     # case first iteration of schedule loop
-            #     else: 
-            #         # search for best move on a new mct
-            #         best_move = mcts.search(self)
-            # self = best_move.scheduler
-            # print(f'Children: {len(best_move.children)}')
-            # print('--------------------------')
-            # for children in best_move.children:
-            #     print(best_move.children[children].scheduler.to_string())
-            # print('--------------------------')
-            # random selection of next task to execute
-            # states = self.generate_states()
-            # print(states)
-            # self = random.choice(states)[0]
-            # print(self.to_string())
-            # print(self.to_array())
-            # input()
-            # edf selection of next task to execute
-            # periodic_task = self.select_edf()
-            # self.execute_job(periodic_task)
-
-            # select job PIP
-            # self = self.select_pip()
-
-            # choose job to execute section
-            states = self.generate_states()
-            print(states)
-            print()
-            if i < len(inputs):
-                num = inputs[i]
-                i += 1
-                self = states[int(num)][0]
-            # else:
-            #     conf = 'no'
-            #     if len(states) == 1:
-            #         self = random.choice(states)[0]
-            #     else:
-            #         while conf == 'no':
-            #             num = input(f'Enter number from 0 - {len(states)-1}: ')
-            #             while num == '' or int(num) >= len(states):
-            #                 print('inputted number is to high or wrong')
-            #                 num = input(f'Enter number from 0 - {len(states)-1}: ')
-
-            #             print('_____________________________________________________________________________')
-            #             print()
-            #             print(states[int(num)][0].to_string())
-            #             conf = input('Do you want to execute this state? ')
-            #         self = states[int(num)][0]
-            #         inputs.append(int(num))
-            #         i += 1
-            #         print(inputs)
-            
-            # self.execute(self.ready_list[int(num)])
-            # print(f'BEST MOVE SCORE: {best_move.score}')
-            # print(f'SCORE: {self.calculate_score()}')
-            # input()
-            else:
-                # select job PCP
-                self = self.select_pcp()
-
-
-            # print(16*'-' + 'End of Timeslot' + 16*'-')
-            print(self.to_string())
-            input()
-            # print(self.time)
-            # print(self.to_string())
-            # print(self.to_array())
-
-                
-            # print(f'Score: {self.calculate_scores()}')
-            steps += 1
-
-        # print(f'Score: {self.calculate_scores()}')
-        return steps, self
-
+    # turn scheduler object in to a numpy array
     def to_array(self):
         tasks_array = []
 
@@ -731,8 +641,6 @@ class Scheduler:
                 processor_id = 0
                 waiting_priority = 0
                 resource_id = 0
-
-                
                 for index, processor in enumerate(self.processors):
                     if task.released_job == self.processors[processor]:
                         processor_id = index + 1
@@ -757,23 +665,11 @@ class Scheduler:
                
         for state in states:
             if state[1] != 0:
-                possible_moves_array[state[1]-1] = 1
+                possible_moves_array[state[1] % self.ntasks -1] = 1
 
         for index, move in enumerate(possible_moves_array):
             tasks_array[index].insert(0, [move])
         
-
-        # for task in tasks_array:
-        #     for value in task:
-        #         scheduler_array.append(value)
-        # taskset_tensor_2d = torch.Tensor(tasks_array)
-        # taskset_flatten = torch.flatten(taskset_tensor_2d)
-        # time = torch.Tensor([self.time])
-        # scheduler_tensor = torch.cat((time, taskset_flatten),-1)
-        # scheduler_normalize = scheduler_tensor / 10
-        # print(torch.max(taskset_flatten))
-        # print(torch.max(taskset_normalize))
-        # print(scheduler_array)
         return np.asarray(tasks_array)
 
     def to_string(self) -> str:
@@ -812,7 +708,9 @@ class Scheduler:
 
         return f'------------------------Schedule------------------------\n\nTasksets:\n{tasksets}\nTime: {self.time}\n{readylist}\n{resources}\n{processors}\n\n'
 
+# generate tasksets with given settings
 def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod):
+    # set the minimum and maximum utilization 
     for i in range(95, 100, 5):
         utli = float(i / 100)
         tasksets_name = './experiments/inputs/input_task_periodic/' + str(subset) + '/tasksets_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(
@@ -820,80 +718,15 @@ def generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, 
         tasksets = gen.generate(ntasks, msets, processors * utli, res_num, 0.5, c_min, c_max, mod)
         np.save(tasksets_name, tasksets)
 
-    # for i in range (5, 100, 5):
-    #     utli = float(i / 100)
-    #     tasksets_periodic_name = './experiments/inputs/input_task_periodic/' + str(subset) + '/tasksets_n'+str(ntasks)+'_m'+str(msets)+'_p'+str(processors)+ '_u' + str(utli) +'_r'+str(res_num)+'_s'+str(c_min)+'_l'+str(c_max)+'.npy'
-    #     tasksets_periodic = np.load(tasksets_periodic_name, allow_pickle=True)
-    #     # print(tasksets_periodic)
-    #     job_periodic_name = './experiments/inputs/input_job_periodic/' + str(subset) + '/periodic_jobs_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(
-    #         utli) + '_r' + str(res_num) + '_s' + str(c_min) + '_l' + str(c_max) + '.npy'
-    #     jobs_set = []
-    #     for j in range(0, msets):
-    #         jobs = []
-    #         # print('\n')
-    #         for k in range(0, ntasks):
-    #             for b in range(0, 10, tasksets_periodic[j][k][len(tasksets_periodic[j][k])-1]):
-    #                 # print(f'({j}, {k})')
-    #                 # print(f'B:{b}')
-    #                 # print(tasksets_periodic[j][k])
-    #                 job = []
-    #                 for s in range(len(tasksets_periodic[j][k])-1):
-    #                     job.append(tasksets_periodic[j][k][s])
-    #                 job.append(int(tasksets_periodic[j][k][len(tasksets_periodic[j][k])-1]))
-    #                 job.append(int(b))
-    #                 job.append(int(b + tasksets_periodic[j][k][len(tasksets_periodic[j][k])-1]))
-    #                 job.append(int(k))
-    #                 # now the job structure is [normal_1, critical, normal_2, resource_id, period, release time, deadline, task_id]
-    #                 # print(f'Job: {job}')
-    #                 jobs.append(job)
-    #             # print(type(jobs))
-    #         jobs_set.append(jobs)
-    #         # print(type(jobs_set))
-    #     np.save(job_periodic_name, jobs_set)
-
+# load tasksets with given settings and covert into 2D list of task objects 
 def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, SPORADIC):
-    # job_sets = []
     task_sets = []
+    # set the minimum and maximum utilization
     for i in range(95, 100, 5):
         utli = float(i / 100)
         tasksets_name = './experiments/inputs/input_task_periodic/' + str(subset) + '/tasksets_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(utli) + '_r' + str(res_num) + '_s' + str(c_min) + '_l' + str(c_max)  + '.npy'
         task_sets.append(np.load(tasksets_name, allow_pickle=True))
-
-        # job_periodic_name = './experiments/inputs/input_job_periodic/' + str(subset) + '/periodic_jobs_n' + str(ntasks) + '_m' + str(msets) + '_p' + str(processors) + '_u' + str(utli) + '_r' + str(res_num) + '_s' + str(c_min) + '_l' + str(c_max) + '.npy'
-        # job_sets.append(np.load(job_periodic_name, allow_pickle=True))
-
-    '''
-    tasksets = []
-    taskset_id = 1
-    for jobset in job_sets[0]:
-        taskset = []
-        periodic_task = []
-        task_count = 0
-        for job in jobset:
-            jobs = []
-            task_id = (job[-1]) + taskset_id
-            deadline = job[-2]
-            release_time = job[-3]
-            period = job[-4]
-            if SPORADIC:
-                release_time += random.uniform(0,period)
-            for index, item in enumerate(job):
-                if index < len(job)-4:
-                    jobs.append(Job(item[0], item[1], period))
-
-            if len(periodic_task) != 0 and periodic_task[-1].task_id != task_id:
-                taskset.append(PeriodicTask(periodic_task))
-                periodic_task = [Task(jobs, period, release_time, deadline, task_id)]
-            else:
-                periodic_task.append(Task(jobs, period, release_time, deadline, task_id))
-            if deadline == 10:
-                task_count += 1
-        taskset.append(PeriodicTask(periodic_task))
-        tasksets.append(taskset)
-        # print(f'Tasks: {task_count}')
-        taskset_id += task_count'''
-
-    # print(task_sets[0])
+    
     task_id = 1
     tasksets = []
     for task_set in task_sets[0]:
@@ -904,74 +737,3 @@ def load_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, SPOR
         tasksets.append(taskset)
 
     return tasksets
-
-if __name__ == '__main__':
-    # tasks per taskset
-    ntasks = 8
-    # number of tasksets
-    msets = 1
-    # number of processors
-    processors = 1
-    # num of resources
-    res_num = 8
-
-    c_min = 0.05
-    c_max = 0.1
-    subset = 1
-
-    # sporadic setting 0 = Periodic, 1 = Sporadic
-    SPORADIC = 0
-    mod = 1
-
-    # Least common multiple of all Periods in tasksets
-    wins = 0
-    
-    # for i in range(10):
-    #     generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod)
-    #     tasksets = load_tasksets(ntasks=ntasks, msets=msets, processors=processors, res_num=res_num, c_min=c_min, c_max=c_max, subset=subset, SPORADIC=SPORADIC)
-    #     settings = {
-    #         'ntasks': ntasks, 
-    #         'msets': msets, 
-    #         'processors': processors,
-    #         'res_num': res_num,
-    #         'c_min': c_min,
-    #         'c_max': c_max,
-    #         'subset': subset,
-    #         'SPORADIC': SPORADIC,
-    #         'mod': mod
-    #         }
-
-    #     scheduler = Scheduler(tasksets, settings)
-    #     steps, final_state = scheduler.schedule_loop()
-    #     if final_state.calculate_scores() == 1:
-    #         wins += 1
-
-    #     print(f'episode {i}, final score {final_state.calculate_scores()}, steps {steps}')
-    # print(f'Won Games: {wins}')
-    # generate_tasksets(ntasks, msets, processors, res_num, c_min, c_max, subset, mod)
-    tasksets = load_tasksets(ntasks=ntasks, msets=msets, processors=processors, res_num=res_num, c_min=c_min, c_max=c_max, subset=subset, SPORADIC=SPORADIC)
-    settings = {
-        'ntasks': ntasks, 
-        'msets': msets, 
-        'processors': processors,
-        'res_num': res_num,
-        'c_min': c_min,
-        'c_max': c_max,
-        'subset': subset,
-        'SPORADIC': SPORADIC,
-        'mod': mod,
-    }
-
-    scheduler = Scheduler(tasksets, settings)
-    for taskset in scheduler.tasksets:
-        for task in taskset:
-            list = task.released_job.to_list(0, 0, 0, scheduler.time)
-            print(len(list))
-
-    # print('\n-------------------------------------\n')
-    print(scheduler.to_string())
-    print(scheduler.priority_ceilings)
-    # print(scheduler.to_array())
-
-    scheduler.schedule_loop()
-    # print(scheduler.select_edf().to_string())

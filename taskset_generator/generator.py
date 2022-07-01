@@ -7,87 +7,70 @@ import numpy as np
 # mod used to control whether to generate the frame based or periodic tasks
 # mod == 0: frame-based
 # mod == 1: periodic
-# tasksets = gen.generate(ntasks, msets, processors * utli, res_num, 0.5, c_min, c_max, 1)
-def generate(nsets, msets, processors, num_resources, utilization, critical_min, critical_max, mod):
-    # print(f'Processors: {processors}')
-    # utilizations = uniform_utilizations(nsets, msets, processors, utilization) 
+def generate(nsets, msets, utilization, num_resources, max_task_utli, critical_min, critical_max, mod):
     utilizations = []
-    upper_bounds = [utilization] * nsets
+    upper_bounds = [max_task_utli] * nsets
     lower_bounds = [0] * nsets
     
-    # print(f'Upper: {upper_bounds}')
-    # print(f'Lower: {lower_bounds}')
-
+    # distribute utilization to every task for every set
     for _ in range(msets):
-        utilizations.append(drs.drs(nsets, processors, upper_bounds, lower_bounds)) 
-    # # print(utilizations)   
-    # summer = 0
-    # for utilization in utilizations[0]:
-    #     summer += utilization
-    # print(f'Sum: {summer}')
+        utilizations.append(drs.drs(nsets, utilization, upper_bounds, lower_bounds)) 
+    
+
     tasksets = []
     
     # bounds of the critical sections
     c_min = critical_min
     c_max = critical_max
+    # number of resources
     num_res = num_resources
-
+    # periods
     periods = [1, 2, 5, 10]
-    # periods = [5, 10]
 
     for i in range(msets):
         taskset = []
         for j in range(nsets):
             task = []
             execution = utilizations[i][j]
-            # print(f'Execution: {execution}')
+            # distribute utilization of critical sections of task
             critical = np.random.uniform(c_min, c_max) * execution
+            # calcultae normal execution of task
             normal = execution - critical
-            # print(f'Normal: {normal}')
-            # print(f'Critical: {critical}')
 
+            # get number of critical sections
             num_critical = np.random.randint(2, 6)
-            # print(num_critical)
 
-            # normal_sets = randfixed.UUniFastDiscard((num_critical+1), normal, 10)
             normal_sets = []
             critical_sets = []
+            # generate 10 lists of non-critical sections and 10 lists of critical sections
             for s in range(10):
                 normal_sets.append(drs.drs(n=num_critical, sumu=normal))
                 critical_sets.append(drs.drs(n=num_critical, sumu=critical))
-            # normal_sets = randfixed.UUniFastDiscard(num_critical, normal, 10)
             
-            # critical_sets = randfixed.UUniFastDiscard(num_critical, critical, 10)
+            # select randomly 1 list of non-critical section and critical section
             normal_set = normal_sets[np.random.randint(0,10)]
             critical_set = critical_sets[np.random.randint(0, 10)]
-            # print('_________________________________NORMALSETS_______________________________')
-            # print(normal_set)
-            # print('_________________________________CRITICALSETS_______________________________')
-            # print(critical_set)
 
-            sum = 0
-            for z in normal_set:
-                # print(z)
-                sum += z
-            
-            # print('______________________________SUM_______________________________')
-            # print(sum)
-
+            # generate list of segments by creating tuples of (utilization, resource_id)
             for k in range(0, num_critical):
                 resource_id = np.random.randint(0, num_res)
                 task.append([normal_set[k], -1])
                 task.append([critical_set[k], resource_id])
 
-            # task.append([normal_set[num_critical], -1])
+            # append segment [0, -1] to end task with a non-critical section
             task.append([0, -1])
+
+            # framebased
             if (mod == 0):
                 period = 1
             # else periodic tasks
             else:
                 period = periods[np.random.randint(0, 4)]
+                # calculate execution of every segment by multiplying utilization with period
                 for k in range(0, 2*num_critical+1):
                     task[k][0] = task[k][0] * period
-
+            
+            # append period after segments list
             task.append(period)
 
             taskset.append(task)			
